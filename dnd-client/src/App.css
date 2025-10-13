@@ -1,0 +1,149 @@
+@import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Merriweather:wght@400;700&display=swap');
+
+:root {
+  --bg-color: #fdf6e3; /* Parchment */
+  --text-color: #3c3c3c; /* Dark Ink */
+  --header-bg: #261e19; /* Dark Wood/Leather */
+  --header-text: #fdf6e3; /* Parchment on dark */
+  --accent-color: #8b0000; /* Crimson */
+  --border-color: #d3c8b3; /* Faded border */
+  --card-bg: #fff;
+}
+
+body {
+  font-family: 'Merriweather', serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  margin: 0;
+}
+
+.App {
+  text-align: left;
+}
+
+.app-header {
+  background-color: var(--header-bg);
+  color: var(--header-text);
+  padding: 1rem 2rem;
+  border-bottom: 5px solid var(--accent-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.app-header h1 {
+  font-family: 'IM Fell English', serif;
+  margin: 0;
+}
+
+.header-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+}
+
+.main-nav {
+  display: flex;
+  gap: 30px;
+}
+
+.main-nav a {
+  color: var(--header-text);
+  text-decoration: none;
+  font-size: 1.2rem;
+}
+
+.header-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.container {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+h2, h3 {
+  font-family: 'IM Fell English', serif;
+  color: var(--accent-color);
+}
+
+hr {
+  border: 0;
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 3rem 0;
+}
+
+/* Note Cards */
+.note-card-summary, .note-card-full {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  border-radius: 3px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.note-card-summary h3, .note-card-full h3 {
+  margin-top: 0;
+}
+
+.note-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 10px;
+}
+
+.note-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Form */
+.note-form {
+  background-color: #fffaf0;
+  padding: 2rem;
+  border: 1px dashed var(--accent-color);
+  margin: 2rem 0;
+  border-radius: 5px;
+}
+
+.note-form input, .note-form textarea {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  font-family: 'Merriweather', serif;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.note-form textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Buttons */
+.btn-primary, .btn-secondary, .btn-danger {
+  padding: 10px 15px;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-weight: bold;
+  font-family: 'Merriweather', serif;
+}
+.btn-primary { background-color: var(--accent-color); color: white; }
+.btn-secondary { background-color: #ccc; color: #333; }
+.btn-danger { background-color: #333; color: white; }
+
+.btn-primary.btn-primary { /* Specificity to override link styles */
+  text-decoration: none;
+}
