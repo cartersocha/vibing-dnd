@@ -47,6 +47,22 @@ function App() {
       if (noteData.id) {
         // --- UPDATE ---
         const response = await axios.put(`${API_URL}/${noteData.id}`, noteData);
+
+        // Handle relationship changes
+        const originalNote = notes.find(n => n.id === noteData.id);
+        const originalCharIds = originalNote.characters?.map(c => c.id) || [];
+        const newCharIds = noteData.characterIds || [];
+
+        const toAdd = newCharIds.filter(id => !originalCharIds.includes(id));
+        const toRemove = originalCharIds.filter(id => !newCharIds.includes(id));
+
+        const addPromises = toAdd.map(charId => axios.post(`${API_URL}/${noteData.id}/characters`, { characterId: charId }));
+        const removePromises = toRemove.map(charId => axios.delete(`${API_URL}/${noteData.id}/characters/${charId}`));
+
+        await Promise.all([...addPromises, ...removePromises]);
+
+        handleDataChange(); // Refresh all data to get updated relationships
+
         const updated = notes.map(n => n.id === noteData.id ? response.data : n)
                              .sort((a, b) => Number(b.id) - Number(a.id));
         setNotes(updated);
@@ -70,10 +86,15 @@ function App() {
         // --- UPDATE ---
         const formData = new FormData();
         for (const key in charData) {
-          if (key === 'sessionIds' || key === 'sessions' || key === 'imageUrl') continue;
-          // Don't append a null image file
-          if (key === 'image' && !charData[key]) continue;
-          formData.append(key, charData[key]);
+          // Skip complex objects that FormData can't handle
+          if (key === 'sessions' || key === 'sessionIds') {
+            continue;
+          }
+          // Append all other fields, including the image file if it exists.
+          // A null or undefined value for 'image' will be handled correctly.
+          if (charData[key] !== undefined) {
+            formData.append(key, charData[key]);
+          }
         }
 
         const response = await axios.put(`${CHAR_API_URL}/${charData.id}`, formData, {
@@ -91,8 +112,8 @@ function App() {
         // --- CREATE ---
         const formData = new FormData();
         for (const key in charData) {
-          if (key === 'sessionIds') {
-            // FormData doesn't handle arrays well directly, so we skip it here
+          // Skip complex objects and undefined/null values that FormData can't handle
+          if (key === 'sessionIds' || charData[key] === null || charData[key] === undefined) {
             continue;
           }
           formData.append(key, charData[key]);
@@ -145,7 +166,20 @@ function App() {
     fetchCharacters();
   };
 
-  const recentNotes = notes.slice(0, 3);
+  const numberedNotes = React.useMemo(() => {
+    if (!notes || notes.length === 0) return [];
+
+    // Create a sorted copy to determine chronological order
+    const sortedByDate = [...notes].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Create a map of id to session number for efficient lookup
+    const sessionNumberMap = new Map(sortedByDate.map((note, index) => [note.id, index + 1]));
+
+    // Return the original notes array with the session number added
+    return notes.map(note => ({ ...note, sessionNumber: sessionNumberMap.get(note.id) }));
+  }, [notes]);
+
+  const recentNotes = numberedNotes.slice(0, 3);
 
   // Main App component now handles routing
   return (
@@ -174,7 +208,7 @@ function App() {
           <Route path="/sessions" element={
             <div className="container">
               <AllSessionsPage
-                notes={notes}
+                notes={numberedNotes}
               />
             </div>
           } />
@@ -184,14 +218,14 @@ function App() {
           <Route
             path="/characters/new"
             element={
-              <div className="container"><AddCharacterPage onSaveCharacter={handleSaveCharacter} notes={notes} characters={characters} /></div>
+              <div className="container"><AddCharacterPage onSaveCharacter={handleSaveCharacter} notes={numberedNotes} characters={characters} /></div>
             } />
           <Route
             path="/characters/:charId"
             element={
               <div className="container">
                 <CharacterDetailPage
-                  notes={notes}
+                  notes={numberedNotes}
                   onSaveCharacter={handleSaveCharacter}
                   onDeleteCharacter={handleDeleteCharacter}
                   onDataChange={handleDataChange}
@@ -201,14 +235,14 @@ function App() {
           <Route
             path="/sessions/new"
             element={
-              <div className="container"><AddNotePage onSaveNote={handleSaveNote} /></div>
+              <div className="container"><AddNotePage onSaveNote={handleSaveNote} characters={characters} /></div>
             } />
           <Route
             path="/notes/:noteId"
             element={
               <div className="container">
                 <NoteDetailPage
-                  notes={notes}
+                  notes={numberedNotes}
                   characters={characters}
                   onSaveNote={handleSaveNote}
                   onDeleteNote={handleDeleteNote}
@@ -219,7 +253,7 @@ function App() {
           <Route
             path="/calendar"
             element={
-              <CalendarPage notes={notes} />
+              <CalendarPage notes={numberedNotes} />
             } />
           <Route
             path="/map"
@@ -374,7 +408,7 @@ function HomePage({ recentNotes }) {
             <Link to={`/notes/${note.id}`} key={note.id} className="note-link">
               <div className="note-card-summary">
                 <div className="page-header">
-                  <h3>{note.title}</h3>
+                  <h3>Session {note.sessionNumber}: {note.title}</h3>
                   {note.date && <span className="session-date">{new Date(note.date).toLocaleDateString()}</span>}
                 </div>
                 <p>{note.content.substring(0, 100)}...</p>
@@ -420,7 +454,7 @@ function AllSessionsPage({ notes }) {
         {sortedNotes.map(note => (
           <Link to={`/notes/${note.id}`} key={note.id} className="note-link"><div className="note-card-full">
             <div className="page-header">
-              <h3>{note.title}</h3>
+              <h3>Session {note.sessionNumber}: {note.title}</h3>
               {note.date && <span className="session-date">{new Date(note.date).toLocaleDateString()}</span>}
             </div>
             <div className="markdown-content">
@@ -685,7 +719,7 @@ function AddCharacterPage({ onSaveCharacter, notes, characters }) {
   );
 }
 
-function AddNotePage({ onSaveNote }) {
+function AddNotePage({ onSaveNote, characters }) {
   const navigate = useNavigate();
 
   const handleSave = async (noteData) => {
@@ -696,7 +730,7 @@ function AddNotePage({ onSaveNote }) {
   };
 
   return (
-    <NoteForm note={{}} onSave={handleSave} onCancel={() => navigate('/sessions')} />
+    <NoteForm note={{}} onSave={handleSave} onCancel={() => navigate('/sessions')} characters={characters} />
   );
 }
 
@@ -777,12 +811,13 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
           note={note}
           onSave={handleSaveWrapper}
           onCancel={() => setIsEditing(false)}
+          characters={characters}
         />
       ) : (
         <div className="note-card-full">
           <div className="page-header">
             <div>
-              <h2>{note.title}</h2>
+              <h2>Session {note.sessionNumber}: {note.title}</h2>
               {note.date && <p className="session-date-header">{new Date(note.date).toLocaleDateString()}</p>}
             </div>
             <div className="note-actions">
@@ -829,23 +864,28 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
 }
 
 // --- Reusable Form Component ---
-function NoteForm({ note, onSave, onCancel }) {
+function NoteForm({ note, onSave, onCancel, characters = [] }) {
   const [title, setTitle] = useState(note.title || '');
   const [date, setDate] = useState(note.date || new Date().toISOString().split('T')[0]);
   const [content, setContent] = useState(note.content || '');
+  const [selectedCharacters, setSelectedCharacters] = useState(note.characters?.map(c => c.id) || []);
 
   useEffect(() => {
     setTitle(note.title || '');
     setDate(note.date || new Date().toISOString().split('T')[0]);
     setContent(note.content || '');
+    setSelectedCharacters(note.characters?.map(c => c.id) || []);
   }, [note]);
+
+  const handleCharacterToggle = (charId) => {
+    setSelectedCharacters(prev =>
+      prev.includes(charId) ? prev.filter(id => id !== charId) : [...prev, charId]
+    );
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const saveData = async () => {
-      await onSave({ title, date, content });
-    };
-    saveData();
+    onSave({ ...note, title, date, content, characterIds: selectedCharacters });
   };
 
   return (
@@ -881,6 +921,38 @@ function NoteForm({ note, onSave, onCancel }) {
           onChange={e => setContent(e.target.value)}
           required
         />
+      </div>
+      <div className="form-section form-section-flush-header">
+        <div className="page-header">
+          <h4>Characters in this Session</h4>
+          <div className="add-character-to-session">
+            <select
+              onChange={(e) => handleCharacterToggle(Number(e.target.value))}
+              value=""
+              className="btn-secondary"
+            >
+              <option value="" disabled>+ Add Character</option>
+              {characters
+                .filter(char => !selectedCharacters.includes(char.id))
+                .map(char => <option key={char.id} value={char.id}>{char.name}</option>)
+              }
+            </select>
+          </div>
+        </div>
+        <div className="related-items-list">
+          {selectedCharacters.length > 0 ? (
+            characters
+              .filter(char => selectedCharacters.includes(char.id))
+              .map(char => (
+                <span key={char.id} className="related-item-pill editable">
+                  <span>{char.name}</span>
+                  <button type="button" className="pill-close" onClick={() => handleCharacterToggle(char.id)}>&times;</button>
+                </span>
+              ))
+          ) : (
+            <p className="no-items-text">No characters linked yet.</p>
+          )}
+        </div>
       </div>
       <div className="form-actions">
         <button type="submit" className="btn-primary">Save Note</button>
@@ -922,7 +994,22 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave({ name, status, location, race, class: charClass, playerType, backstory, sessionIds: selectedSessions, image: imageFile });
+    const saveData = {
+      name,
+      status,
+      location,
+      race,
+      class: charClass,
+      playerType,
+      backstory,
+      sessionIds: selectedSessions,
+      image: imageFile,
+      imageUrl: character.imageUrl // Preserve the existing imageUrl
+    };
+    if (character.id) {
+      saveData.id = character.id;
+    }
+    onSave(saveData);
   };
 
   return (
