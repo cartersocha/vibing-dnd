@@ -1,586 +1,304 @@
-@import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Merriweather:wght@400;700&display=swap');
+/* --- TYRANNY OF DRAGONS: DARK MODE THEME --- */
+
+/* 1. FONT & ROOT VARIABLES */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 
 :root {
-  --bg-color: #fdf6e3; /* Parchment */
-  --text-color: #3c3c3c; /* Dark Ink */
-  --header-bg: #261e19; /* Dark Wood/Leather */
-  --header-text: #fdf6e3; /* Parchment on dark */
-  --accent-color: #8b0000; /* Crimson */
-  --border-color: #d3c8b3; /* Faded border */
-  --card-bg: #fff;
+  --bg-color: #1e1e2f;
+  --surface-color: #2a2a3f;
+  --text-color: #e0e0e0;
+  --text-muted-color: #a0a0b0;
+  --accent-color: #10a37f;
+  --border-color: #3a3a4f;
 }
 
 body {
-  font-family: 'Merriweather', serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background-color: var(--bg-color);
   color: var(--text-color);
   margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.App {
-  text-align: left;
-}
-
+/* 2. MAIN LAYOUT & SIDEBAR */
 .app-layout {
   display: flex;
 }
 
 .app-sidebar {
-  width: 200px;
+  width: 125px;
   position: fixed;
   top: 0;
   left: 0;
   bottom: 0;
-  background-color: var(--header-bg);
-  color: var(--header-text);
-  padding: 2rem;
-  border-bottom: 5px solid var(--accent-color);
+  background-color: var(--surface-color);
+  border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  border-right: 5px solid var(--accent-color);
-  border-bottom: none;
+  padding: 1.5rem;
+}
+.app-sidebar, .app-content { transition: all 0.3s ease-in-out; }
+
+.app-content {
+  margin-left: calc(125px + 2rem); /* Sidebar width + gap */
+  padding: 2rem 3rem;
+  width: 100%;
+}
+
+/* 3. NAVIGATION & HEADER */
+.sidebar-header {
+  text-align: center;
 }
 
 .sidebar-header h1 {
-  font-family: 'IM Fell English', serif;
+  font-size: 1.2rem;
+  font-weight: 700;
   margin: 0;
-  text-align: center;
+}
+
+.header-link {
+  color: var(--text-color);
+  text-decoration: none;
 }
 
 .main-nav {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.5rem;
   margin-top: 2rem;
+  margin-top: 1rem;
 }
 
 .main-nav a {
-  color: var(--header-text);
+  color: var(--text-muted-color);
   text-decoration: none;
-  font-size: 1.2rem;
-  padding: 10px;
-  border-radius: 3px;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .main-nav a:hover {
-  background-color: rgba(255,255,255,0.1);
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-color);
 }
 
-.container {
-  max-width: 800px;
-  margin: 2rem auto;
-  padding: 0 1rem;
+.main-nav a.active {
+  background-color: var(--accent-color);
+  color: #fff;
 }
 
-.app-content {
-  margin-left: 200px; /* Same as sidebar width */
-  padding: 2rem;
-  width: 100%;
-}
+/* --- Collapsed Sidebar State --- */
+.app-layout.sidebar-collapsed .app-sidebar { width: 70px; }
+.app-layout.sidebar-collapsed .app-content { margin-left: calc(70px + 2rem); }
+.app-layout.sidebar-collapsed .sidebar-header h1,
+.app-layout.sidebar-collapsed .main-nav .link-text { display: none; }
 
-.sidebar-add-button {
-  margin-top: auto;
-  text-align: center;
-}
-
-.header-link {
-  color: inherit;
-  text-decoration: none;
-}
-
-/* Reusable page header for sections */
+/* 4. CONTENT & HIERARCHY */
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
-}
-
-h2, h3 {
-  font-family: 'IM Fell English', serif;
-  color: var(--accent-color);
-}
-
-hr {
-  border: 0;
-  height: 1px;
-  background-color: var(--border-color);
-  margin: 3rem 0;
-}
-
-/* Note Cards */
-.note-card-summary, .note-card-full {
-  background-color: var(--card-bg);
-  border: 1px solid var(--border-color);
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  border-radius: 3px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-}
-
-.note-card-summary h3, .note-card-full h3 {
-  margin-top: 0;
-}
-
-.note-actions {
-  margin-top: 1rem;
-  display: flex;
-  gap: 10px;
-}
-
-.note-link {
-  color: inherit;
-  text-decoration: none;
-}
-
-.session-date {
-  font-style: italic;
-  color: #666;
-  font-size: 0.9rem;
-}
-
-.session-date-header {
-  font-style: italic;
-  color: #666;
-  margin: -0.5rem 0 0 0;
-  font-size: 1rem;
-}
-
-/* Re-use note card styles for character details */
-.character-detail-card {
-  background-color: var(--card-bg);
-  border: 1px solid var(--border-color);
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  border-radius: 3px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-}
-
-.character-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2rem;
-  margin: 1.5rem 0;
-  padding: 1rem;
-  background-color: #fdfbf5;
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-}
-
-.character-detail-layout {
-  display: flex;
-  gap: 2rem;
-}
-
-.character-detail-main {
-  flex: 1;
-}
-
-.character-detail-sidebar {
-  flex-basis: 220px;
-}
-
-.character-portrait-container {
-  position: sticky;
-  top: 2rem;
-}
-
-.character-portrait-large {
-  width: 100%;
-  height: auto;
-  object-fit: cover;
-  border-radius: 5px;
-  border: 3px solid var(--border-color);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-  background-color: #f8f3e8;
-}
-/* Character Table */
-.characters-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.characters-table th, .characters-table td {
-  padding: 12px 15px;
+  margin-bottom: 2rem;
   border-bottom: 1px solid var(--border-color);
-  text-align: left;
+  padding-bottom: 1rem;
 }
-.active-filters-container {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  background-color: #f8f3e8;
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-color);
+  font-weight: 700;
+  margin: 0;
+}
+
+h1 { font-size: 2.25rem; }
+h2 { font-size: 1.75rem; }
+h3 { font-size: 1.25rem; }
+
+p {
+  line-height: 1.6;
+  color: var(--text-muted-color);
+}
+
+a {
+  color: var(--accent-color);
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+
+a:hover {
+  opacity: 0.8;
+}
+
+/* 5. CARD COMPONENT */
+.card {
+  background-color: var(--surface-color);
   border: 1px solid var(--border-color);
-  border-radius: 3px;
+  border-radius: 8px;
+  padding: 1.5rem;
   margin-bottom: 1.5rem;
-  flex-wrap: wrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.active-filters-label {
-  font-weight: bold;
-  font-size: 0.9rem;
-}
-
-.pills-wrapper {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.filter-pill {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background-color: var(--accent-color);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 0.85rem;
-  font-weight: bold;
-}
-
-.pill-close {
-  background: none;
-  border: none;
-  color: white;
-  cursor: pointer;
-  font-size: 1.2em;
-  line-height: 1;
-  padding: 0;
-  margin-left: 4px;
-}
-/* Form */
-.note-form {
-  background-color: #fffaf0;
-  padding: 2rem;
-  border: 1px dashed var(--accent-color);
-  margin: 2rem 0;
-  border-radius: 5px;
-}
-.th-content {
+.card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.filter-wrapper {
-  position: relative;
-  display: inline-block;
-}
-
-.filter-icon {
-  font-size: 0.7em;
-  margin-left: 8px;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 3px;
-  opacity: 0.5;
-}
-
-.filter-icon:hover {
-  background-color: #e8e1d1;
-  opacity: 1;
-}
-
-.filter-icon.active {
-  color: var(--accent-color);
-  opacity: 1;
-}
-
-.filter-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  background-color: white;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-  z-index: 10;
-  min-width: 200px;
-  border-radius: 3px;
-}
-
-.filter-search {
-  width: 100%;
-  padding: 8px;
-  box-sizing: border-box;
-  border: none;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.characters-table th {
-  background-color: #f8f3e8;
-  font-family: 'IM Fell English', serif;
-  color: var(--accent-color);
-  font-size: 1.1rem;
-  cursor: pointer;
-  user-select: none; /* Prevents text selection on click */
-  position: relative;
-}
-.characters-table tbody tr:hover {
-  background-color: #fdfbf5;
-  cursor: pointer;
-}
-
-.note-form input, .note-form textarea, .note-form select {
-  width: 100%;
-  padding: 10px;
-  /* margin-bottom is handled by form-field or grid gap */
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  font-family: 'Merriweather', serif;
-  font-size: 1rem;
-  box-sizing: border-box;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.form-field {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 1.5rem;
-}
-
-.form-field label {
-  margin-bottom: 0.5rem;
-  font-weight: bold;
-}
-
-.note-form textarea {
-  min-height: 150px;
-  resize: vertical;
-}
-
-.form-section {
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border-color);
-}
-
-.character-image-section {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  border-top: none;
-  padding-top: 0;
-  margin-top: 0;
-  margin-bottom: 2rem;
-}
-
-.character-image-preview {
-  width: 100px;
-  height: 100px;
-  object-fit: cover;
-  border-radius: 5px;
-  border: 2px solid var(--border-color);
-  background-color: #f8f3e8;
-}
-
-/* A variation for sections where the header is flush with the content */
-.form-section-flush-header .page-header {
-  margin-bottom: 0.75rem;
-}
-
-.no-items-text {
-  font-style: italic;
-  color: #666;
-}
-.form-section h4 {
-  margin-top: 0;
   margin-bottom: 1rem;
 }
 
-.checkbox-list {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.form-actions {
-  display: flex;
-  gap: 10px;
-}
-
-/* Buttons */
-.btn-primary, .btn-secondary, .btn-danger {
-  padding: 10px 15px;
+/* 6. BUTTONS */
+.btn {
+  padding: 0.6rem 1rem;
   border: none;
-  border-radius: 3px;
+  border-radius: 6px;
   cursor: pointer;
-  font-weight: bold;
-  font-family: 'Merriweather', serif;
-}
-.btn-primary { background-color: var(--accent-color); color: white; }
-.btn-secondary { background-color: #ccc; color: #333; }
-.btn-danger { background-color: #333; color: white; }
-
-.btn-primary.btn-primary { /* Specificity to override link styles */
+  font-weight: 700;
+  font-size: 0.85rem;
   text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  transition: background-color 0.2s ease;
 }
 
-.filter-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  max-height: 200px;
-  overflow-y: auto;
+.btn-primary {
+  background-color: var(--accent-color);
+  color: #fff;
 }
 
-.filter-list li {
-  padding: 8px 12px;
-  cursor: pointer;
+.btn-primary:hover {
+  background-color: #13c496;
+  color: #fff;
 }
 
-.filter-list li:hover {
-  background-color: #f8f3e8;
-}
-.filter-list li.selected { font-weight: bold; }
-
-.related-items-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.related-item-pill {
-  background-color: #e8e1d1;
+.btn-secondary {
+  background-color: #3a3a4f;
   color: var(--text-color);
-  padding: 6px 12px;
-  border-radius: 15px;
-  text-decoration: none;
-  font-size: 0.9rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
 }
 
-.related-item-pill.editable a {
-  color: inherit;
-  text-decoration: none;
+.btn-secondary:hover {
+  background-color: #4a4a5f;
 }
-
-.related-item-pill.editable span {
-  text-decoration: none;
-}
-
-.related-item-pill:hover {
-  background-color: var(--border-color);
-}
-
-.add-character-to-session select {
-  font-family: 'Merriweather', serif;
-  font-size: 1rem;
-  /* Make select look like a button */
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  padding: 10px 15px;
-}
-
-.markdown-content {
-  line-height: 1.6;
-}
-
-.markdown-content h1, .markdown-content h2, .markdown-content h3 {
-  font-family: 'IM Fell English', serif;
-  color: var(--accent-color);
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 0.3em;
-}
-
-.markdown-content ul, .markdown-content ol {
-  padding-left: 20px;
-}
-
 
 .header-actions-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.75rem;
 }
 
-/* Calendar Styles */
-.calendar-container {
-  /* Make the container grow to fill the space */
-  flex-grow: 1;
-  display: flex;
+/* 7. FORMS & INPUTS */
+.form-field {
+  margin-bottom: 1.5rem;
 }
 
-/* Override default calendar page styles for full-page view */
-.container-full-width .page-header {
-  padding: 0 2rem;
+.form-field label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
 }
 
-.react-calendar {
+.form-input,
+.form-textarea,
+.form-select {
   width: 100%;
-  border: none;
-  font-size: 1.1rem;
-  font-family: 'Merriweather', serif;
-  /* Make the calendar itself grow */
-  flex-grow: 1;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-color);
+  font-size: 1rem;
+  box-sizing: border-box;
 }
 
-.react-calendar__navigation button {
-  font-family: 'IM Fell English', serif;
+.form-input:focus,
+.form-textarea:focus,
+.form-select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.3);
+}
+
+.form-textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+/* 8. TABLES */
+.table-container {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.data-table th,
+.data-table td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.data-table th {
+  font-weight: 700;
+  color: var(--text-muted-color);
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+}
+
+.data-table tbody tr:hover {
+  background-color: rgba(42, 42, 63, 0.5);
+}
+
+/* 9. RESPONSIVE (Example for mobile) */
+@media (max-width: 768px) {
+  .app-layout {
+    flex-direction: column;
+  }
+
+  .app-sidebar {
+    position: static;
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    box-sizing: border-box;
+  }
+
+  .sidebar-header {
+    margin-bottom: 0;
+  }
+
+  .main-nav {
+    /* This would typically be hidden behind a hamburger menu icon */
+    display: none;
+  }
+
+  .app-content {
+    margin-left: 0;
+    padding: 1.5rem;
+  }
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  text-align: center;
+}
+
+.sidebar-toggle {
+  width: 100%;
+  font-weight: bold;
   font-size: 1.2rem;
-  color: var(--accent-color);
-}
-
-.react-calendar__month-view__weekdays__weekday {
-  font-family: 'IM Fell English', serif;
-  color: var(--accent-color);
-  text-decoration: none;
-}
-
-.react-calendar__tile {
-  border-radius: 3px;
-  padding: 1em 0.5em;
-}
-
-.react-calendar__tile:enabled:hover,
-.react-calendar__tile:enabled:focus {
-  background-color: #f8f3e8;
-}
-
-.react-calendar__tile--now {
-  background-color: #e8e1d1;
-}
-
-.session-marker {
-  height: 8px;
-  width: 8px;
-  background-color: var(--accent-color);
-  border-radius: 50%;
-  margin: 0 auto;
-  margin-top: 4px;
-}
-
-.map-placeholder-container {
-  height: calc(100vh - 10rem); /* Adjust height to fill viewport minus header/padding */
-  width: 100%;
-}
-
-.map-placeholder {
-  width: 100%;
-  height: 100%;
-  background-color: #e8e1d1;
-  border: 3px dashed var(--border-color);
-  border-radius: 5px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-family: 'IM Fell English', serif;
-  font-size: 1.5rem;
-  color: #856d4b;
 }

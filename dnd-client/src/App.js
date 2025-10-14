@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Routes, Route, Link, useParams, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, NavLink, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './App.css';
 import ReactMarkdown from 'react-markdown';
@@ -13,6 +13,7 @@ const CHAR_API_URL = 'http://localhost:5001/api/characters';
 function App() {
   const [notes, setNotes] = useState([]);
   const [characters, setCharacters] = useState([]);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   const fetchCharacters = useCallback(async () => {
     try {
@@ -183,17 +184,22 @@ function App() {
 
   // Main App component now handles routing
   return (
-    <div className="app-layout">
+    <div className={`app-layout ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside className="app-sidebar">
         <div className="sidebar-header">
           <h1><Link to="/" className="header-link">Tyranny of Dragons</Link></h1>
         </div>
         <nav className="main-nav">
-          <Link to="/sessions">Sessions</Link>
-          <Link to="/characters">Characters</Link>
-          <Link to="/calendar">Calendar</Link>
-          <Link to="/map">Map</Link>
+          <NavLink to="/sessions"><span className="link-text">Sessions</span></NavLink>
+          <NavLink to="/characters"><span className="link-text">Characters</span></NavLink>
+          <NavLink to="/calendar"><span className="link-text">Calendar</span></NavLink>
+          <NavLink to="/map"><span className="link-text">Map</span></NavLink>
         </nav>
+        <div className="sidebar-footer">
+          <button className="btn btn-secondary sidebar-toggle" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
+            &lt;
+          </button>
+        </div>
       </aside>
 
       <div className="app-content">
@@ -327,20 +333,20 @@ function CharactersPage({ characters }) {
     <section>
       <div className="page-header">
         <h2>Characters</h2>
-        <Link to="/characters/new" className="btn-primary">+ Create Character</Link>
+        <Link to="/characters/new" className="btn btn-primary">+ Create Character</Link>
       </div>
       {activeFilters.length > 0 && (
-        <div className="active-filters-container">
+        <div className="card">
           <span className="active-filters-label">Active Filters:</span>
           <div className="pills-wrapper">
             {activeFilters.map(([key, value]) => (
               <span key={key} className="filter-pill">
                 {key}: {value}
-                <button className="pill-close" onClick={() => handleFilterChange(key, '')}>&times;</button>
+                <button className="pill-close" onClick={() => handleFilterChange(key, '')}>&times;</button> {/* This needs styling */}
               </span>
             ))}
           </div>
-          <button className="btn-secondary" onClick={() => setColumnFilters({})}>Clear All</button>
+          <button className="btn btn-secondary" onClick={() => setColumnFilters({})}>Clear All</button>
         </div>
       )}
       <table className="characters-table">
@@ -401,13 +407,13 @@ function HomePage({ recentNotes }) {
       <section>
         <div className="page-header">
           <h2>Recent Dispatches</h2>
-          <Link to="/sessions/new" className="btn-primary">+ Add Session</Link>
+          <Link to="/sessions/new" className="btn btn-primary">+ Add Session</Link>
         </div>
         {recentNotes.length ? (
           recentNotes.map(note => (
             <Link to={`/notes/${note.id}`} key={note.id} className="note-link">
-              <div className="note-card-summary">
-                <div className="page-header">
+              <div className="card">
+                <div className="card-header">
                   <h3>Session {note.sessionNumber}: {note.title}</h3>
                   {note.date && <span className="session-date">{new Date(note.date).toLocaleDateString()}</span>}
                 </div>
@@ -444,15 +450,15 @@ function AllSessionsPage({ notes }) {
       <div className="page-header">
         <h2>Full Campaign Log</h2>
         <div className="header-actions-group">
-          <button onClick={toggleSortOrder} className="btn-secondary">
+          <button onClick={toggleSortOrder} className="btn btn-secondary">
             Sort: {sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
           </button>
-          <Link to="/sessions/new" className="btn-primary">+ Add Session</Link>
+          <Link to="/sessions/new" className="btn btn-primary">+ Add Session</Link>
         </div>
       </div>
       <div className="note-list-full">
         {sortedNotes.map(note => (
-          <Link to={`/notes/${note.id}`} key={note.id} className="note-link"><div className="note-card-full">
+          <Link to={`/notes/${note.id}`} key={note.id} className="note-link"><div className="card">
             <div className="page-header">
               <h3>Session {note.sessionNumber}: {note.title}</h3>
               {note.date && <span className="session-date">{new Date(note.date).toLocaleDateString()}</span>}
@@ -473,7 +479,7 @@ function MapPage() {
       <div className="page-header">
         <h2>World Map</h2>
       </div>
-      <div className="map-placeholder-container">
+      <div className="card map-placeholder-container">
         <div className="map-placeholder">
           <p>The world map will be displayed here.</p>
         </div>
@@ -547,7 +553,7 @@ function CalendarPage({ notes }) {
       <div className="page-header">
         <h2>Campaign Calendar</h2>
       </div>
-      <div className="calendar-container">
+      <div className="card calendar-container">
         <Calendar
           tileContent={tileContent}
           onClickDay={handleDayClick}
@@ -648,9 +654,9 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
           <div className="character-detail-main">
             <div className="page-header">
               <h2>{character.name}</h2>
-              <div className="note-actions">
-                <button className="btn-primary" onClick={() => setIsEditing(true)}>Edit</button>
-                <button className="btn-danger" onClick={handleDelete}>Delete</button>
+              <div className="header-actions-group">
+                <button className="btn btn-secondary" onClick={() => setIsEditing(true)}>Edit</button>
+                <button className="btn btn-danger" onClick={handleDelete}>Delete</button> {/* This needs styling */}
               </div>
             </div>
             <div className="character-stats">
@@ -672,7 +678,7 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
                   <select
                     onChange={(e) => addSessionToCharacter(e.target.value)}
                     value=""
-                    className="btn-secondary"
+                    className="btn btn-secondary"
                   >
                     <option value="" disabled>+ Add to Session</option>
                     {availableSessions.map(note => <option key={note.id} value={note.id}>{note.title}</option>)}
@@ -820,9 +826,9 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
               <h2>Session {note.sessionNumber}: {note.title}</h2>
               {note.date && <p className="session-date-header">{new Date(note.date).toLocaleDateString()}</p>}
             </div>
-            <div className="note-actions">
-              <button className="btn-primary" onClick={() => setIsEditing(true)}>Edit</button>
-              <button className="btn-danger" onClick={handleDelete}>Delete</button>
+            <div className="header-actions-group">
+              <button className="btn btn-secondary" onClick={() => setIsEditing(true)}>Edit</button>
+              <button className="btn btn-danger" onClick={handleDelete}>Delete</button> {/* This needs styling */}
             </div>
           </div>
           <div className="markdown-content">
@@ -836,7 +842,7 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
                 <select
                   onChange={(e) => addCharacterToSession(e.target.value)}
                   value=""
-                  className="btn-primary"
+                  className="btn btn-primary"
                 >
                   <option value="" disabled>+ Add Character</option>
                   {availableCharacters.map(char => (
@@ -889,7 +895,7 @@ function NoteForm({ note, onSave, onCancel, characters = [] }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="note-form">
+    <form onSubmit={handleSubmit} className="card">
       {note.id && <h3>Edit Note</h3>}
       <div className="form-grid">
         <div className="form-field">
@@ -897,7 +903,7 @@ function NoteForm({ note, onSave, onCancel, characters = [] }) {
           <input
             id="note-title"
             type="text"
-            value={title}
+            className="form-input" value={title}
             onChange={e => setTitle(e.target.value)}
             required
           />
@@ -907,7 +913,7 @@ function NoteForm({ note, onSave, onCancel, characters = [] }) {
           <input
             id="note-date"
             type="date"
-            value={date}
+            className="form-input" value={date}
             onChange={e => setDate(e.target.value)}
             required
           />
@@ -917,7 +923,7 @@ function NoteForm({ note, onSave, onCancel, characters = [] }) {
         <label htmlFor="note-content">Session Details</label>
         <textarea
           id="note-content"
-          value={content}
+          className="form-textarea" value={content}
           onChange={e => setContent(e.target.value)}
           required
         />
@@ -929,7 +935,7 @@ function NoteForm({ note, onSave, onCancel, characters = [] }) {
             <select
               onChange={(e) => handleCharacterToggle(Number(e.target.value))}
               value=""
-              className="btn-secondary"
+              className="btn btn-secondary"
             >
               <option value="" disabled>+ Add Character</option>
               {characters
@@ -955,8 +961,8 @@ function NoteForm({ note, onSave, onCancel, characters = [] }) {
         </div>
       </div>
       <div className="form-actions">
-        <button type="submit" className="btn-primary">Save Note</button>
-        <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="btn btn-primary">Save Note</button>
+        <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
       </div>
     </form>
   );
@@ -1013,7 +1019,7 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
   };
 
   return (
-    <form onSubmit={handleSubmit} className="note-form">
+    <form onSubmit={handleSubmit} className="card">
       {character.id && <h3>Edit Character</h3>}
       <div className="form-section character-image-section">
         {imagePreview && <img src={imagePreview} alt="Character preview" className="character-image-preview" />}
@@ -1032,7 +1038,7 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
           <label htmlFor="char-name">Character Name</label>
           <input
             id="char-name"
-            type="text"
+            type="text" className="form-input"
             value={name}
             onChange={e => setName(e.target.value)}
             required
@@ -1040,7 +1046,7 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
         </div>
         <div className="form-field">
           <label htmlFor="char-status">Status</label>
-          <select id="char-status" value={status} onChange={e => setStatus(e.target.value)} required>
+          <select id="char-status" className="form-select" value={status} onChange={e => setStatus(e.target.value)} required>
             <option value="Alive">Alive</option>
             <option value="Dead">Dead</option>
             <option value="Missing">Missing</option>
@@ -1050,28 +1056,28 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
           <label htmlFor="char-location">Last Known Location</label>
           <input
             id="char-location"
-            type="text"
+            type="text" className="form-input"
             value={location}
             onChange={e => setLocation(e.target.value)}
           />
         </div>
         <div className="form-field">
           <label htmlFor="char-race">Race</label>
-          <select id="char-race" value={race} onChange={e => setRace(e.target.value)} required>
+          <select id="char-race" className="form-select" value={race} onChange={e => setRace(e.target.value)} required>
             <option value="" disabled>Select a Race</option>
             {races.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
         <div className="form-field">
           <label htmlFor="char-class">Class</label>
-          <select id="char-class" value={charClass} onChange={e => setCharClass(e.target.value)} required>
+          <select id="char-class" className="form-select" value={charClass} onChange={e => setCharClass(e.target.value)} required>
             <option value="" disabled>Select a Class</option>
             {classes.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div className="form-field">
           <label htmlFor="char-type">Player Type</label>
-          <select id="char-type" value={playerType} onChange={e => setPlayerType(e.target.value)} required>
+          <select id="char-type" className="form-select" value={playerType} onChange={e => setPlayerType(e.target.value)} required>
             <option value="Player">Player</option>
             <option value="Non-Player">Non-Player</option>
           </select>
@@ -1080,7 +1086,7 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
       <div className="form-field">
         <label htmlFor="char-backstory">Backstory & Notes</label>
         <textarea
-          id="char-backstory"
+          id="char-backstory" className="form-textarea"
           value={backstory}
           onChange={e => setBackstory(e.target.value)}
         />
@@ -1092,7 +1098,7 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
             <select
               onChange={(e) => handleSessionToggle(Number(e.target.value))}
               value=""
-              className="btn-secondary"
+              className="btn btn-secondary"
             >
               <option value="" disabled>+ Add to Session</option>
               {notes
@@ -1119,8 +1125,8 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
         </div>
       </div>
       <div className="form-actions">
-        <button type="submit" className="btn-primary">Save Character</button>
-        <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="btn btn-primary">Save Character</button>
+        <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
       </div>
     </form>
   );
