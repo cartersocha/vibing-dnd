@@ -68,6 +68,11 @@ body {
   text-decoration: none;
 }
 
+.header-link:hover {
+  color: var(--accent-color);
+  transition: color 0.2s ease;
+}
+
 .main-nav {
   display: flex;
   flex-direction: column;
