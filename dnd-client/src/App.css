@@ -113,6 +113,12 @@ body {
   padding-bottom: 1rem;
 }
 
+.page-header h2,
+.page-header h3,
+.card-header h3 {
+  color: var(--accent-color);
+}
+
 h1, h2, h3, h4, h5, h6 {
   color: var(--text-color);
   font-weight: 700;
@@ -158,6 +164,16 @@ a:hover {
 /* Remove padding from cards that directly contain a table */
 .card.table-container {
   padding: 0;
+}
+
+.session-banner-image {
+  width: calc(100% + 3rem); /* Extend outside of card padding */
+  margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+  max-height: 300px;
+  object-fit: cover;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 /* 6. BUTTONS */
@@ -341,6 +357,11 @@ a:hover {
 
 .data-table tbody tr:hover {
   background-color: rgba(42, 42, 63, 0.5);
+}
+
+.data-table td strong {
+  color: var(--accent-color);
+  font-weight: 600;
 }
 
 /* Character table improvements */

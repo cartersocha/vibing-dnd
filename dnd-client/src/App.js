@@ -46,7 +46,20 @@ function App() {
     try {
       if (noteData.id) {
         // --- UPDATE ---
-        const response = await axios.put(`${API_URL}/${noteData.id}`, noteData);
+        const formData = new FormData();
+        for (const key in noteData) {
+          if (key === 'characters' || key === 'characterIds') continue;
+          if (key === 'image' && !noteData[key]) continue;
+          if (noteData[key] !== undefined) {
+            formData.append(key, noteData[key]);
+          }
+        }
+
+        const response = await axios.put(`${API_URL}/${noteData.id}`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
 
         // Handle relationship changes
         const originalNote = notes.find(n => n.id === noteData.id);
@@ -69,7 +82,18 @@ function App() {
         return response.data;
       } else {
         // --- CREATE ---
-        const response = await axios.post(API_URL, noteData);
+        const formData = new FormData();
+        for (const key in noteData) {
+          if (key === 'characterIds' || noteData[key] === null || noteData[key] === undefined) continue;
+          formData.append(key, noteData[key]);
+        }
+
+        const response = await axios.post(API_URL, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
         setNotes([...notes, response.data].sort((a, b) => Number(b.id) - Number(a.id)));
         return response.data;
       }
@@ -937,7 +961,10 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
           characters={characters}
         />
       ) : (
-        <div className="note-card-full">
+        <div className="card">
+          {note.imageUrl && (
+            <img src={`http://localhost:5001${note.imageUrl}`} alt={note.title} className="session-banner-image" />
+          )}
           <div className="page-header">
             <div>
               <h2>Session {note.sessionNumber}: {note.title}</h2>
@@ -945,21 +972,21 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
             </div>
             <div className="header-actions-group">
               <button className="btn btn-secondary" onClick={() => setIsEditing(true)}>Edit</button>
-              <button className="btn btn-danger" onClick={handleDelete}>Delete</button> {/* This needs styling */}
+              <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
             </div>
           </div>
           <div className="markdown-content">
             <ReactMarkdown rehypePlugins={[rehypeRaw]}>{note.content}</ReactMarkdown>
           </div>
-          <hr />
-          <div className="page-header">
+          <hr style={{ margin: '2rem 0' }} />
+          <div className="card-header">
             <h3>Characters in this Session</h3>
             {availableCharacters.length > 0 && (
               <div className="add-character-to-session">
                 <select
                   onChange={(e) => addCharacterToSession(e.target.value)}
                   value=""
-                  className="btn btn-primary"
+                  className="btn btn-secondary"
                 >
                   <option value="" disabled>+ Add Character</option>
                   {availableCharacters.map(char => (
@@ -978,8 +1005,7 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
                 </span>
               ))}
             </div>
-          ) : <p>No characters have been added to this session yet.</p>}
-
+          ) : <p className="no-items-text">No characters have been added to this session yet.</p>}
         </div>
       )}
     </div>
@@ -991,14 +1017,25 @@ function NoteForm({ note, onSave, onCancel, characters = [] }) {
   const [title, setTitle] = useState(note.title || '');
   const [date, setDate] = useState(note.date || new Date().toISOString().split('T')[0]);
   const [content, setContent] = useState(note.content || '');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(note.imageUrl ? `http://localhost:5001${note.imageUrl}` : null);
   const [selectedCharacters, setSelectedCharacters] = useState(note.characters?.map(c => c.id) || []);
 
   useEffect(() => {
     setTitle(note.title || '');
     setDate(note.date || new Date().toISOString().split('T')[0]);
     setContent(note.content || '');
+    setImagePreview(note.imageUrl ? `http://localhost:5001${note.imageUrl}` : null);
     setSelectedCharacters(note.characters?.map(c => c.id) || []);
   }, [note]);
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
 
   const handleCharacterToggle = (charId) => {
     setSelectedCharacters(prev =>
@@ -1008,12 +1045,24 @@ function NoteForm({ note, onSave, onCancel, characters = [] }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave({ ...note, title, date, content, characterIds: selectedCharacters });
+    onSave({ ...note, title, date, content, characterIds: selectedCharacters, image: imageFile });
   };
 
   return (
     <form onSubmit={handleSubmit} className="card">
       {note.id && <h3>Edit Session</h3>}
+      <div className="form-section character-image-section">
+        {imagePreview && <img src={imagePreview} alt="Session preview" className="character-image-preview" />}
+        <div className="image-upload-wrapper">
+          <label htmlFor="session-image-upload">Session Banner</label>
+          <input
+            id="session-image-upload"
+            type="file"
+            accept="image/png, image/jpeg, image/webp"
+            onChange={handleImageChange}
+          />
+        </div>
+      </div>
       <div className="form-grid">
         <div className="form-field">
           <label htmlFor="note-title">Session Title</label>
