@@ -64,27 +64,50 @@ function App() {
     try {
       if (charData.id) {
         // --- UPDATE ---
-        const response = await axios.put(`${CHAR_API_URL}/${charData.id}`, charData);
+        const formData = new FormData();
+        for (const key in charData) {
+          if (key === 'sessionIds' || key === 'sessions' || key === 'imageUrl') continue;
+          // Don't append a null image file
+          if (key === 'image' && !charData[key]) continue;
+          formData.append(key, charData[key]);
+        }
+
+        const response = await axios.put(`${CHAR_API_URL}/${charData.id}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+
+        // The logic for updating session relationships remains the same
+        // and would be handled separately if needed.
+
         const updated = characters.map(c => c.id === charData.id ? response.data : c)
                                   .sort((a, b) => a.name.localeCompare(b.name));
         setCharacters(updated);
         return response.data;
       } else {
         // --- CREATE ---
-        // Separate sessionIds from the rest of the character data
-        const { sessionIds, ...coreCharData } = charData;
-        const response = await axios.post(CHAR_API_URL, coreCharData);
+        const formData = new FormData();
+        for (const key in charData) {
+          if (key === 'sessionIds') {
+            // FormData doesn't handle arrays well directly, so we skip it here
+            continue;
+          }
+          formData.append(key, charData[key]);
+        }
+
+        const response = await axios.post(CHAR_API_URL, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
         const newChar = response.data;
 
         // If sessions were selected, create those relationships now
-        if (sessionIds && sessionIds.length > 0) {
-          const relationshipPromises = sessionIds.map(sessionId =>
+        if (charData.sessionIds && charData.sessionIds.length > 0) {
+          const relationshipPromises = charData.sessionIds.map(sessionId =>
             axios.post(`${API_URL}/${sessionId}/characters`, { characterId: newChar.id })
           );
           await Promise.all(relationshipPromises);
         }
 
-        setCharacters([...characters, response.data].sort((a, b) => a.name.localeCompare(b.name)));
+        setCharacters([...characters, newChar].sort((a, b) => a.name.localeCompare(b.name)));
         return response.data;
       }
     } catch (err) {
@@ -354,6 +377,10 @@ function CharacterDetailPage({ characters, notes, onSaveCharacter, onDeleteChara
   const [character, setCharacter] = useState(null);
 
   useEffect(() => {
+    // Don't refetch when we are just exiting edit mode,
+    // as the save handler has already updated the state.
+    if (isEditing) return;
+
     const fetchCharacter = async () => {
       try {
         const res = await axios.get(`${CHAR_API_URL}/${charId}`);
@@ -409,12 +436,12 @@ function CharacterDetailPage({ characters, notes, onSaveCharacter, onDeleteChara
 
   // Find sessions that this character is NOT a part of
   const availableSessions = notes.filter(
-    note => !character?.sessions.some(cs => cs.id === note.id)
+    note => !character?.sessions?.some(cs => cs.id === note.id)
   );
 
   if (character === null) {
     // Differentiate between loading and not found
-    const originalChar = characters.find(c => c.id === Number(charId));
+    const originalChar = characters.some(c => c.id === Number(charId));
     if (originalChar) {
       return <h2>Loading Character...</h2>;
     }
@@ -442,6 +469,11 @@ function CharacterDetailPage({ characters, notes, onSaveCharacter, onDeleteChara
               <button className="btn-danger" onClick={handleDelete}>Delete</button>
             </div>
           </div>
+          {character.imageUrl && (
+            <div className="character-portrait-container">
+              <img src={`http://localhost:5001${character.imageUrl}`} alt={character.name} className="character-portrait-large" />
+            </div>
+          )}
           <div className="character-stats">
             <span><strong>Race:</strong> {character.race}</span>
             <span><strong>Class:</strong> {character.class}</span>
@@ -595,32 +627,31 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote }) {
         />
       ) : (
         <div className="note-card-full">
-          <h2>{note.title}</h2>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{note.content}</p>
-          <div className="note-actions">
-            <button className="btn-primary" onClick={() => setIsEditing(true)}>Edit</button>
-            <button className="btn-danger" onClick={handleDelete}>Delete</button>
+          <div className="page-header">
+            <h2>{note.title}</h2>
+            <div className="note-actions">
+              <button className="btn-primary" onClick={() => setIsEditing(true)}>Edit</button>
+              <button className="btn-danger" onClick={handleDelete}>Delete</button>
+            </div>
           </div>
+          <p style={{ whiteSpace: 'pre-wrap' }}>{note.content}</p>
           <hr />
           <div className="page-header">
             <h3>Characters in this Session</h3>
-            <div className="header-actions-group">
-              {availableCharacters.length > 0 && (
-                <div className="add-character-to-session">
-                  <select
-                    onChange={(e) => addCharacterToSession(e.target.value)}
-                    value=""
-                    className="btn-secondary"
-                  >
-                    <option value="" disabled>+ Add Character</option>
-                    {availableCharacters.map(char => (
-                      <option key={char.id} value={char.id}>{char.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <Link to="/characters/new" className="btn-primary">+ Create Character</Link>
-            </div>
+            {availableCharacters.length > 0 && (
+              <div className="add-character-to-session">
+                <select
+                  onChange={(e) => addCharacterToSession(e.target.value)}
+                  value=""
+                  className="btn-primary"
+                >
+                  <option value="" disabled>+ Add Character</option>
+                  {availableCharacters.map(char => (
+                    <option key={char.id} value={char.id}>{char.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           {note.characters && note.characters.length > 0 ? (
             <div className="related-items-list">
@@ -690,6 +721,8 @@ function CharacterForm({ character, onSave, onCancel, notes = [] }) {
   const [charClass, setCharClass] = useState(character.class || '');
   const [backstory, setBackstory] = useState(character.backstory || '');
   const [selectedSessions, setSelectedSessions] = useState(character.sessions?.map(s => s.id) || []);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(character.imageUrl ? `http://localhost:5001${character.imageUrl}` : null);
 
   const races = ['Human', 'Elf', 'Dwarf', 'Halfling', 'Dragonborn', 'Gnome', 'Half-Elf', 'Half-Orc', 'Tiefling'];
   const classes = ['Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard'];
@@ -700,14 +733,34 @@ function CharacterForm({ character, onSave, onCancel, notes = [] }) {
     );
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave({ name, status, location, race, class: charClass, backstory, sessionIds: selectedSessions });
+    onSave({ name, status, location, race, class: charClass, backstory, sessionIds: selectedSessions, image: imageFile });
   };
 
   return (
     <form onSubmit={handleSubmit} className="note-form">
       <h3>{character.id ? 'Edit Character' : 'Create New Character'}</h3>
+      <div className="form-section character-image-section">
+        {imagePreview && <img src={imagePreview} alt="Character preview" className="character-image-preview" />}
+        <div className="image-upload-wrapper">
+          <label htmlFor="character-image-upload">Character Portrait</label>
+          <input
+            id="character-image-upload"
+            type="file"
+            accept="image/png, image/jpeg, image/webp"
+            onChange={handleImageChange}
+          />
+        </div>
+      </div>
       <div className="form-grid">
         <input
           type="text"

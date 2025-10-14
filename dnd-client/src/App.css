@@ -130,6 +130,20 @@ hr {
   border-radius: 3px;
 }
 
+.character-portrait-container {
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.character-portrait-large {
+  max-width: 200px;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: 5px;
+  border: 3px solid var(--border-color);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  background-color: #f8f3e8;
+}
 /* Character Table */
 .characters-table {
   width: 100%;
@@ -283,6 +297,25 @@ hr {
   margin-top: 2rem;
   padding-top: 1.5rem;
   border-top: 1px solid var(--border-color);
+}
+
+.character-image-section {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+  margin-bottom: 2rem;
+}
+
+.character-image-preview {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 5px;
+  border: 2px solid var(--border-color);
+  background-color: #f8f3e8;
 }
 
 /* A variation for sections where the header is flush with the content */

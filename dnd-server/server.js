@@ -1,12 +1,29 @@
 const express = require('express');
 const cors = require('cors');
 const sanitizeHtml = require('sanitize-html');
+const multer = require('multer');
+const path = require('path');
 
 const app = express();
 const PORT = 5001;
 
 app.use(cors());
 app.use(express.json());
+// Serve static files from the 'public' directory
+app.use(express.static('public'));
+
+// --- Multer Configuration for File Uploads ---
+const storage = multer.diskStorage({
+  destination: './public/uploads/',
+  filename: function(req, file, cb){
+    cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 10000000 } // 10MB limit
+}).single('image'); // 'image' is the name of the form field
 
 // --- In-Memory Database ---
 let notes = [
@@ -16,7 +33,7 @@ let notes = [
   { id: 4, title: 'Session 4: The Cultist\'s Ritual', content: 'Deep inside the cave, the party stumbled upon a group of cultists performing a dark ritual.' },
 ];
 let characters = [
-  { id: 1, name: 'Aelar', race: 'Elf', class: 'Ranger', status: 'Active', location: 'Neverwinter', backstory: 'A mysterious ranger from the north.' }
+  { id: 1, name: 'Aelar', race: 'Elf', class: 'Ranger', status: 'Active', location: 'Neverwinter', backstory: 'A mysterious ranger from the north.', imageUrl: null }
 ];
 let nextNoteId = 5;
 let nextCharId = 2;
@@ -77,6 +94,13 @@ app.put('/api/notes/:id', (req, res) => {
   res.json(notes[noteIndex]);
 });
 
+// DELETE a note
+app.delete('/api/notes/:id', (req, res) => {
+  const noteId = parseInt(req.params.id);
+  notes = notes.filter(n => n.id !== noteId);
+  res.status(204).send();
+});
+
 // GET a single note with related characters
 app.get('/api/notes/:id', (req, res) => {
   const noteId = parseInt(req.params.id);
@@ -92,13 +116,6 @@ app.get('/api/notes/:id', (req, res) => {
   res.json({ ...note, characters: relatedCharacters });
 });
 
-// DELETE a note
-app.delete('/api/notes/:id', (req, res) => {
-  const noteId = parseInt(req.params.id);
-  notes = notes.filter(n => n.id !== noteId);
-  res.status(204).send();
-});
-
 // --- CHARACTERS API ---
 
 // GET all characters
@@ -106,37 +123,49 @@ app.get('/api/characters', (req, res) => res.json(characters));
 
 // POST a new character
 app.post('/api/characters', (req, res) => {
-  const { name, race, class: charClass } = req.body;
-  if (!name || !race || !charClass) {
-    return res.status(400).json({ message: 'Name, race, and class are required' });
-  }
+  upload(req, res, (err) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error uploading file.', error: err });
+    }
+    const { name, race, class: charClass } = req.body;
+    if (!name || !race || !charClass) {
+      return res.status(400).json({ message: 'Name, race, and class are required' });
+    }
 
-  const sanitizedBody = {};
-  for (const key in req.body) {
-    sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
-  }
+    const sanitizedBody = {};
+    for (const key in req.body) {
+      sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+    }
 
-  const newChar = { id: nextCharId++, ...sanitizedBody };
-  characters.push(newChar);
-  res.status(201).json(newChar);
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    const newChar = { id: nextCharId++, ...sanitizedBody, imageUrl };
+    characters.push(newChar);
+    res.status(201).json(newChar);
+  });
 });
 
 // PUT (update) a character
 app.put('/api/characters/:id', (req, res) => {
-  const charId = parseInt(req.params.id);
-  const charIndex = characters.findIndex(c => c.id === charId);
-
-  if (charIndex === -1) return res.status(404).json({ message: 'Character not found' });
-
-  const sanitizedBody = {};
-  for (const key in req.body) {
-    if (req.body[key]) {
-      sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+  upload(req, res, (err) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error uploading file.', error: err });
     }
-  }
+    const charId = parseInt(req.params.id);
+    const charIndex = characters.findIndex(c => c.id === charId);
 
-  characters[charIndex] = { ...characters[charIndex], ...sanitizedBody };
-  res.json(characters[charIndex]);
+    if (charIndex === -1) return res.status(404).json({ message: 'Character not found' });
+
+    const sanitizedBody = {};
+    for (const key in req.body) {
+      if (req.body[key]) {
+        sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+      }
+    }
+
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : characters[charIndex].imageUrl;
+    characters[charIndex] = { ...characters[charIndex], ...sanitizedBody, imageUrl };
+    res.json(characters[charIndex]);
+  });
 });
 
 // GET a single character with related sessions
