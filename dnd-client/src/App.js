@@ -259,12 +259,12 @@ function App() {
           <Route
             path="/calendar"
             element={
-              <CalendarPage notes={numberedNotes} />
+              <div className="container"><CalendarPage notes={numberedNotes} /></div>
             } />
           <Route
             path="/map"
             element={
-              <MapPage />
+              <div className="container"><MapPage /></div>
             } />
         </Routes>
       </div>
@@ -349,7 +349,8 @@ function CharactersPage({ characters }) {
           <button className="btn btn-secondary" onClick={() => setColumnFilters({})}>Clear All</button>
         </div>
       )}
-      <table className="characters-table">
+      <div className="card table-container">
+        <table className="data-table">
         <thead>
           <tr>
             <th onClick={(e) => handleSort(e, 'name')}>
@@ -397,6 +398,7 @@ function CharactersPage({ characters }) {
           )}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

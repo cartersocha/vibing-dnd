@@ -41,9 +41,15 @@ body {
 .app-sidebar, .app-content { transition: all 0.3s ease-in-out; }
 
 .app-content {
-  margin-left: calc(125px + 2rem); /* Sidebar width + gap */
+  margin-left: 125px; /* This should match the sidebar width */
   padding: 2rem 3rem;
-  width: 100%;
+  width: calc(100% - 125px); /* Full width minus sidebar width */
+  box-sizing: border-box;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 /* 3. NAVIGATION & HEADER */
@@ -92,7 +98,7 @@ body {
 
 /* --- Collapsed Sidebar State --- */
 .app-layout.sidebar-collapsed .app-sidebar { width: 70px; }
-.app-layout.sidebar-collapsed .app-content { margin-left: calc(70px + 2rem); }
+.app-layout.sidebar-collapsed .app-content { margin-left: 70px; width: calc(100% - 70px); }
 .app-layout.sidebar-collapsed .sidebar-header h1,
 .app-layout.sidebar-collapsed .main-nav .link-text { display: none; }
 
@@ -146,6 +152,11 @@ a:hover {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
+}
+
+/* Remove padding from cards that directly contain a table */
+.card.table-container {
+  padding: 0;
 }
 
 /* 6. BUTTONS */
@@ -238,6 +249,7 @@ a:hover {
 .data-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   text-align: left;
 }
 
