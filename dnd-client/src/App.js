@@ -13,7 +13,6 @@ const CHAR_API_URL = 'http://localhost:5001/api/characters';
 function App() {
   const [notes, setNotes] = useState([]);
   const [characters, setCharacters] = useState([]);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   const fetchCharacters = useCallback(async () => {
     try {
@@ -184,22 +183,17 @@ function App() {
 
   // Main App component now handles routing
   return (
-    <div className={`app-layout ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+    <div className="app-layout">
       <aside className="app-sidebar">
         <div className="sidebar-header">
           <h1><Link to="/" className="header-link">Tyranny of Dragons</Link></h1>
         </div>
         <nav className="main-nav">
-          <NavLink to="/sessions"><span className="link-text">Sessions</span></NavLink>
-          <NavLink to="/characters"><span className="link-text">Characters</span></NavLink>
-          <NavLink to="/calendar"><span className="link-text">Calendar</span></NavLink>
-          <NavLink to="/map"><span className="link-text">Map</span></NavLink>
+          <NavLink to="/sessions">Sessions</NavLink>
+          <NavLink to="/characters">Characters</NavLink>
+          <NavLink to="/calendar">Calendar</NavLink>
+          <NavLink to="/map">Map</NavLink>
         </nav>
-        <div className="sidebar-footer">
-          <button className="btn btn-secondary sidebar-toggle" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
-            &lt;
-          </button>
-        </div>
       </aside>
 
       <div className="app-content">
@@ -277,7 +271,6 @@ function App() {
 function CharactersPage({ characters, notes }) {
   const navigate = useNavigate();
   const [activeFilters, setActiveFilters] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'ascending' });
   const [filtersVisible, setFiltersVisible] = useState(false);
 
   const filterOptions = [
@@ -288,14 +281,6 @@ function CharactersPage({ characters, notes }) {
     { key: 'location', label: 'Location', type: 'select' },
     { key: 'sessions', label: 'Related Sessions', type: 'select' }
   ];
-
-  const handleSort = (key) => {
-    let direction = 'ascending';
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
-    }
-    setSortConfig({ key, direction });
-  };
 
   const addFilter = (filterKey) => {
     if (!activeFilters.find(f => f.key === filterKey)) {
@@ -324,7 +309,7 @@ function CharactersPage({ characters, notes }) {
     return [...new Set(characters.map(c => c[key]))].filter(Boolean).sort();
   };
 
-  const sortedAndFilteredCharacters = React.useMemo(() => {
+  const filteredCharacters = React.useMemo(() => {
     let filtered = [...characters];
 
     // Apply filters
@@ -346,21 +331,8 @@ function CharactersPage({ characters, notes }) {
       }
     });
 
-    // Apply sorting
-    filtered.sort((a, b) => {
-      const aValue = a[sortConfig.key] || '';
-      const bValue = b[sortConfig.key] || '';
-      if (aValue < bValue) {
-        return sortConfig.direction === 'ascending' ? -1 : 1;
-      }
-      if (aValue > bValue) {
-        return sortConfig.direction === 'ascending' ? 1 : -1;
-      }
-      return 0;
-    });
-
     return filtered;
-  }, [characters, activeFilters, sortConfig]);
+  }, [characters, activeFilters]);
 
   return (
     <section>
@@ -469,29 +441,17 @@ function CharactersPage({ characters, notes }) {
         <table className="data-table">
           <thead>
             <tr>
-              <th onClick={() => handleSort('name')} className="sortable">
-                Name {sortConfig.key === 'name' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('race')} className="sortable">
-                Race {sortConfig.key === 'race' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('class')} className="sortable">
-                Class {sortConfig.key === 'class' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('playerType')} className="sortable">
-                Type {sortConfig.key === 'playerType' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('status')} className="sortable">
-                Status {sortConfig.key === 'status' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('location')} className="sortable">
-                Location {sortConfig.key === 'location' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}
-              </th>
+              <th>Name</th>
+              <th>Race</th>
+              <th>Class</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Location</th>
             </tr>
           </thead>
           <tbody>
-            {sortedAndFilteredCharacters.length > 0 ? (
-              sortedAndFilteredCharacters.map(char => (
+            {filteredCharacters.length > 0 ? (
+              filteredCharacters.map(char => (
                 <tr key={char.id} onClick={() => navigate(`/characters/${char.id}`)} className="clickable-row">
                   <td><strong>{char.name}</strong></td>
                   <td>{char.race}</td>
@@ -1053,7 +1013,7 @@ function NoteForm({ note, onSave, onCancel, characters = [] }) {
 
   return (
     <form onSubmit={handleSubmit} className="card">
-      {note.id && <h3>Edit Note</h3>}
+      {note.id && <h3>Edit Session</h3>}
       <div className="form-grid">
         <div className="form-field">
           <label htmlFor="note-title">Session Title</label>

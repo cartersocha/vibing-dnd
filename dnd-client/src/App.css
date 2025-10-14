@@ -89,6 +89,8 @@ body {
   padding: 0.75rem 1rem;
   border-radius: 6px;
   transition: background-color 0.2s ease, color 0.2s ease;
+  display: flex;
+  align-items: center;
 }
 
 .main-nav a:hover {
@@ -100,12 +102,6 @@ body {
   background-color: var(--accent-color);
   color: #fff;
 }
-
-/* --- Collapsed Sidebar State --- */
-.app-layout.sidebar-collapsed .app-sidebar { width: 70px; }
-.app-layout.sidebar-collapsed .app-content { margin-left: 70px; width: calc(100% - 70px); }
-.app-layout.sidebar-collapsed .sidebar-header h1,
-.app-layout.sidebar-collapsed .main-nav .link-text { display: none; }
 
 /* 4. CONTENT & HIERARCHY */
 .page-header {
@@ -279,6 +275,38 @@ a:hover {
   resize: vertical;
 }
 
+.form-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.character-image-section {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  background-color: var(--bg-color);
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 1.5rem;
+}
+
+.character-image-preview {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  background-color: var(--surface-color);
+}
+
+.image-upload-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 .form-actions {
   display: flex;
   gap: 0.75rem;
@@ -330,16 +358,6 @@ a:hover {
   color: var(--text-muted-color);
   font-style: italic;
   padding: 2rem;
-}
-
-.sortable {
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.2s ease;
-}
-
-.sortable:hover {
-  background-color: rgba(16, 163, 127, 0.1);
 }
 
 /* Filter controls */
@@ -597,17 +615,6 @@ a:hover {
     margin-left: 0;
     padding: 1.5rem;
   }
-}
-
-.sidebar-footer {
-  margin-top: auto;
-  text-align: center;
-}
-
-.sidebar-toggle {
-  width: 100%;
-  font-weight: bold;
-  font-size: 1.2rem;
 }
 
 .character-detail-layout {
