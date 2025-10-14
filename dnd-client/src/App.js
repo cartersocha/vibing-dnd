@@ -149,21 +149,20 @@ function App() {
 
   // Main App component now handles routing
   return (
-    <div className="App">
-      <header className="app-header">
-        <h1><Link to="/" className="header-link">The Crimson Cipher</Link></h1>
-        <div className="header-nav-group">
-          <nav className="main-nav">
-            <Link to="/">Home</Link>
-            <Link to="/characters">Characters</Link>
-            <Link to="/calendar">Calendar</Link>
-            <Link to="/sessions">Sessions</Link>
-          </nav>
-          <Link to="/sessions/new" className="btn-primary">+ Add Session</Link>
+    <div className="app-layout">
+      <aside className="app-sidebar">
+        <div className="sidebar-header">
+          <h1><Link to="/" className="header-link">Tyranny of Dragons</Link></h1>
         </div>
-      </header>
+        <nav className="main-nav">
+          <Link to="/sessions">Sessions</Link>
+          <Link to="/characters">Characters</Link>
+          <Link to="/calendar">Calendar</Link>
+          <Link to="/map">Map</Link>
+        </nav>
+      </aside>
 
-      <main className="app-main">
+      <div className="app-content">
         <Routes>
           <Route path="/" element={
             <div className="container">
@@ -222,8 +221,13 @@ function App() {
             element={
               <CalendarPage notes={notes} />
             } />
+          <Route
+            path="/map"
+            element={
+              <MapPage />
+            } />
         </Routes>
-      </main>
+      </div>
     </div>
   );
 }
@@ -360,8 +364,11 @@ function CharactersPage({ characters }) {
 function HomePage({ recentNotes }) {
   return (
     <>
-      <section className="homepage-section">
-        <h2>Recent Dispatches</h2>
+      <section>
+        <div className="page-header">
+          <h2>Recent Dispatches</h2>
+          <Link to="/sessions/new" className="btn-primary">+ Add Session</Link>
+        </div>
         {recentNotes.length ? (
           recentNotes.map(note => (
             <Link to={`/notes/${note.id}`} key={note.id} className="note-link">
@@ -402,9 +409,12 @@ function AllSessionsPage({ notes }) {
     <section className="all-sessions-page">
       <div className="page-header">
         <h2>Full Campaign Log</h2>
-        <button onClick={toggleSortOrder} className="btn-secondary">
-          Sort: {sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
-        </button>
+        <div className="header-actions-group">
+          <button onClick={toggleSortOrder} className="btn-secondary">
+            Sort: {sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
+          </button>
+          <Link to="/sessions/new" className="btn-primary">+ Add Session</Link>
+        </div>
       </div>
       <div className="note-list-full">
         {sortedNotes.map(note => (
@@ -418,6 +428,21 @@ function AllSessionsPage({ notes }) {
             </div>
           </div></Link>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function MapPage() {
+  return (
+    <section>
+      <div className="page-header">
+        <h2>World Map</h2>
+      </div>
+      <div className="map-placeholder-container">
+        <div className="map-placeholder">
+          <p>The world map will be displayed here.</p>
+        </div>
       </div>
     </section>
   );
