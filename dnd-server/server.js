@@ -46,7 +46,19 @@ let sessionCharacters = [
 // --- API Endpoints ---
 
 // GET all notes
-app.get('/api/notes', (req, res) => res.json(notes));
+app.get('/api/notes', (req, res) => {
+  const notesWithCharacters = notes.map(note => {
+    const relatedCharacterIds = sessionCharacters
+      .filter(sc => sc.sessionId === note.id)
+      .map(sc => sc.characterId);
+    
+    const relatedCharacters = characters.filter(c => relatedCharacterIds.includes(c.id));
+    
+    return { ...note, characters: relatedCharacters };
+  });
+  
+  res.json(notesWithCharacters);
+});
 
 // POST a new note
 app.post('/api/notes', (req, res) => {
@@ -120,7 +132,19 @@ app.delete('/api/notes/:id', (req, res) => {
 // --- CHARACTERS API ---
 
 // GET all characters
-app.get('/api/characters', (req, res) => res.json(characters));
+app.get('/api/characters', (req, res) => {
+  const charactersWithSessions = characters.map(character => {
+    const relatedSessionIds = sessionCharacters
+      .filter(sc => sc.characterId === character.id)
+      .map(sc => sc.sessionId);
+    
+    const relatedSessions = notes.filter(n => relatedSessionIds.includes(n.id));
+    
+    return { ...character, sessions: relatedSessions };
+  });
+  
+  res.json(charactersWithSessions);
+});
 
 // POST a new character
 app.post('/api/characters', (req, res) => {

@@ -220,7 +220,7 @@ function App() {
           } />
           <Route
             path="/characters"
-            element={<div className="container"><CharactersPage characters={characters} /></div>} />
+            element={<div className="container"><CharactersPage characters={characters} notes={numberedNotes} /></div>} />
           <Route
             path="/characters/new"
             element={
@@ -274,15 +274,22 @@ function App() {
 
 // --- Page Components ---
 
-function CharactersPage({ characters }) {
+function CharactersPage({ characters, notes }) {
   const navigate = useNavigate();
-  const [columnFilters, setColumnFilters] = useState({});
+  const [activeFilters, setActiveFilters] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'ascending' });
+  const [filtersVisible, setFiltersVisible] = useState(false);
 
-  const handleSort = (event, key) => {
-    // Don't sort if the click was on the filter button
-    if (event.target.closest('.filter-icon')) return;
+  const filterOptions = [
+    { key: 'race', label: 'Race', type: 'select' },
+    { key: 'class', label: 'Class', type: 'select' },
+    { key: 'playerType', label: 'Type', type: 'select' },
+    { key: 'status', label: 'Status', type: 'select' },
+    { key: 'location', label: 'Location', type: 'select' },
+    { key: 'sessions', label: 'Related Sessions', type: 'select' }
+  ];
 
+  const handleSort = (key) => {
     let direction = 'ascending';
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
       direction = 'descending';
@@ -290,26 +297,56 @@ function CharactersPage({ characters }) {
     setSortConfig({ key, direction });
   };
 
-  const handleFilterChange = (key, value) => {
-    setColumnFilters(prev => ({ ...prev, [key]: value }));
+  const addFilter = (filterKey) => {
+    if (!activeFilters.find(f => f.key === filterKey)) {
+      setActiveFilters(prev => [...prev, { key: filterKey, values: [] }]);
+    }
   };
 
-  const activeFilters = Object.entries(columnFilters).filter(([, value]) => value);
+  const updateFilter = (filterKey, values) => {
+    setActiveFilters(prev => 
+      prev.map(f => f.key === filterKey ? { ...f, values } : f)
+    );
+  };
 
-  const getSortIndicator = (key) => {
-    if (sortConfig.key !== key) return null;
-    return sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
+  const removeFilter = (filterKey) => {
+    setActiveFilters(prev => prev.filter(f => f.key !== filterKey));
+  };
+
+  const clearAllFilters = () => {
+    setActiveFilters([]);
+  };
+
+  const getUniqueValues = (key) => {
+    if (key === 'sessions') {
+      return [...new Set(notes.map(n => n.title))].filter(Boolean).sort();
+    }
+    return [...new Set(characters.map(c => c[key]))].filter(Boolean).sort();
   };
 
   const sortedAndFilteredCharacters = React.useMemo(() => {
     let filtered = [...characters];
 
-    Object.entries(columnFilters).forEach(([key, value]) => {
-      if (value) {
-        filtered = filtered.filter(char => String(char[key]) === String(value));
+    // Apply filters
+    activeFilters.forEach(filter => {
+      if (filter.values && filter.values.length > 0) {
+        if (filter.key === 'sessions') {
+          // Filter by related sessions - check if character has any of the selected sessions
+          filtered = filtered.filter(char => {
+            if (!char.sessions || char.sessions.length === 0) return false;
+            return char.sessions.some(session => filter.values.includes(session.title));
+          });
+        } else {
+          // Filter by character properties
+          filtered = filtered.filter(char => {
+            const charValue = String(char[filter.key] || '');
+            return filter.values.includes(charValue);
+          });
+        }
       }
     });
 
+    // Apply sorting
     filtered.sort((a, b) => {
       const aValue = a[sortConfig.key] || '';
       const bValue = b[sortConfig.key] || '';
@@ -323,81 +360,156 @@ function CharactersPage({ characters }) {
     });
 
     return filtered;
-  }, [characters, columnFilters, sortConfig]);
-
-  const getColumnOptions = (key) => {
-    return [...new Set(characters.map(c => c[key]))].filter(Boolean).sort();
-  };
+  }, [characters, activeFilters, sortConfig]);
 
   return (
     <section>
       <div className="page-header">
         <h2>Characters</h2>
-        <Link to="/characters/new" className="btn btn-primary">+ Create Character</Link>
+        <div className="header-actions-group">
+          <button className="btn btn-secondary" onClick={() => setFiltersVisible(!filtersVisible)}>
+            {filtersVisible ? 'Hide Filters' : 'Show Filters'}
+          </button>
+          <Link to="/characters/new" className="btn btn-primary">+ Create Character</Link>
+        </div>
       </div>
-      {activeFilters.length > 0 && (
+      
+      {/* Dynamic Filter Controls */}
+      {filtersVisible && (
         <div className="card">
-          <span className="active-filters-label">Active Filters:</span>
-          <div className="pills-wrapper">
-            {activeFilters.map(([key, value]) => (
-              <span key={key} className="filter-pill">
-                {key}: {value}
-                <button className="pill-close" onClick={() => handleFilterChange(key, '')}>&times;</button> {/* This needs styling */}
-              </span>
-            ))}
+          <div className="filters-header">
+            <h3>Filters</h3>
+            <div className="filter-actions">
+              <select 
+                value="" 
+                onChange={(e) => e.target.value && addFilter(e.target.value)}
+                className="filter-add-select"
+              >
+                <option value="">+ Add Filter</option>
+                {filterOptions
+                  .filter(option => !activeFilters.find(f => f.key === option.key))
+                  .map(option => (
+                    <option key={option.key} value={option.key}>{option.label}</option>
+                  ))
+                }
+              </select>
+              {activeFilters.length > 0 && (
+                <button className="btn btn-secondary" onClick={clearAllFilters}>Clear All</button>
+              )}
+            </div>
           </div>
-          <button className="btn btn-secondary" onClick={() => setColumnFilters({})}>Clear All</button>
+          
+          {activeFilters.length > 0 && (
+            <div className="active-filters">
+              {activeFilters.map(filter => {
+                const option = filterOptions.find(opt => opt.key === filter.key);
+                const availableValues = getUniqueValues(filter.key);
+                
+                return (
+                  <div key={filter.key} className="filter-item">
+                    <label>{option?.label}</label>
+                    <div className="filter-controls">
+                      <div className="multi-select-container">
+                        <div className="selected-values">
+                          {filter.values.length === 0 ? (
+                            <span className="placeholder">Select {option?.label.toLowerCase()}</span>
+                          ) : (
+                            filter.values.map(value => (
+                              <span key={value} className="selected-value">
+                                {value}
+                                <button 
+                                  className="remove-value"
+                                  onClick={() => {
+                                    const newValues = filter.values.filter(v => v !== value);
+                                    updateFilter(filter.key, newValues);
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))
+                          )}
+                        </div>
+                        <div className="multi-select-options">
+                          {availableValues
+                            .filter(value => !filter.values.includes(value))
+                            .map(value => (
+                              <button
+                                key={value}
+                                className="option-button"
+                                onClick={() => {
+                                  const newValues = [...filter.values, value];
+                                  updateFilter(filter.key, newValues);
+                                }}
+                              >
+                                + {value}
+                              </button>
+                            ))
+                          }
+                        </div>
+                      </div>
+                      <button 
+                        className="filter-remove" 
+                        onClick={() => removeFilter(filter.key)}
+                        title="Remove filter"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
+
+      {/* Characters Table */}
       <div className="card table-container">
         <table className="data-table">
-        <thead>
-          <tr>
-            <th onClick={(e) => handleSort(e, 'name')}>
-              <div className="th-content">
-                <span>Name{getSortIndicator('name')}</span>
-                <ColumnFilter columnKey="name" options={getColumnOptions('name')} onChange={handleFilterChange} value={columnFilters.name} />
-              </div>
-            </th>
-            <th onClick={(e) => handleSort(e, 'race')}>
-              <div className="th-content">
-                <span>Race{getSortIndicator('race')}</span>
-                <ColumnFilter columnKey="race" options={getColumnOptions('race')} onChange={handleFilterChange} value={columnFilters.race} />
-              </div>
-            </th>
-            <th onClick={(e) => handleSort(e, 'class')}>
-              <div className="th-content">
-                <span>Class{getSortIndicator('class')}</span>
-                <ColumnFilter columnKey="class" options={getColumnOptions('class')} onChange={handleFilterChange} value={columnFilters.class} />
-              </div>
-            </th>
-            <th onClick={(e) => handleSort(e, 'playerType')}>
-              <div className="th-content">
-                <span>Type{getSortIndicator('playerType')}</span>
-                <ColumnFilter columnKey="playerType" options={getColumnOptions('playerType')} onChange={handleFilterChange} value={columnFilters.playerType} />
-              </div>
-            </th>
-            <th onClick={(e) => handleSort(e, 'status')}>Status{getSortIndicator('status')}</th>
-            <th onClick={(e) => handleSort(e, 'location')}>Last Known Location{getSortIndicator('location')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sortedAndFilteredCharacters.length > 0 ? (
-            sortedAndFilteredCharacters.map(char => (
-              <tr key={char.id} onClick={() => navigate(`/characters/${char.id}`)}>
-                <td>{char.name}</td>
-                <td>{char.race}</td>
-                <td>{char.class}</td>
-                <td>{char.playerType}</td>
-                <td>{char.status}</td>
-                <td>{char.location}</td>
+          <thead>
+            <tr>
+              <th onClick={() => handleSort('name')} className="sortable">
+                Name {sortConfig.key === 'name' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}
+              </th>
+              <th onClick={() => handleSort('race')} className="sortable">
+                Race {sortConfig.key === 'race' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}
+              </th>
+              <th onClick={() => handleSort('class')} className="sortable">
+                Class {sortConfig.key === 'class' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}
+              </th>
+              <th onClick={() => handleSort('playerType')} className="sortable">
+                Type {sortConfig.key === 'playerType' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}
+              </th>
+              <th onClick={() => handleSort('status')} className="sortable">
+                Status {sortConfig.key === 'status' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}
+              </th>
+              <th onClick={() => handleSort('location')} className="sortable">
+                Location {sortConfig.key === 'location' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedAndFilteredCharacters.length > 0 ? (
+              sortedAndFilteredCharacters.map(char => (
+                <tr key={char.id} onClick={() => navigate(`/characters/${char.id}`)} className="clickable-row">
+                  <td><strong>{char.name}</strong></td>
+                  <td>{char.race}</td>
+                  <td>{char.class}</td>
+                  <td>{char.playerType}</td>
+                  <td>{char.status}</td>
+                  <td>{char.location}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="6" className="no-results">
+                  {activeFilters.length > 0 ? 'No characters match the current filters.' : 'No characters found.'}
+                </td>
               </tr>
-            ))
-          ) : (
-            <tr><td colSpan="6">No characters match the current filters.</td></tr>
-          )}
-        </tbody>
-      </table>
+            )}
+          </tbody>
+        </table>
       </div>
     </section>
   );
@@ -420,6 +532,17 @@ function HomePage({ recentNotes }) {
                   {note.date && <span className="session-date">{new Date(note.date).toLocaleDateString()}</span>}
                 </div>
                 <p>{note.content.substring(0, 100)}...</p>
+                {note.characters && note.characters.length > 0 && (
+                  <div className="session-characters">
+                    <div className="related-items-list">
+                      {note.characters.map(char => (
+                        <span key={char.id} className="related-item-pill">
+                          <Link to={`/characters/${char.id}`} onClick={(e) => e.stopPropagation()}>{char.name}</Link>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </Link>
           ))
@@ -468,6 +591,17 @@ function AllSessionsPage({ notes }) {
             <div className="markdown-content">
               <ReactMarkdown rehypePlugins={[rehypeRaw]}>{`${note.content.substring(0, 200)}...`}</ReactMarkdown>
             </div>
+            {note.characters && note.characters.length > 0 && (
+              <div className="session-characters">
+                <div className="related-items-list">
+                  {note.characters.map(char => (
+                    <span key={char.id} className="related-item-pill">
+                      <Link to={`/characters/${char.id}`} onClick={(e) => e.stopPropagation()}>{char.name}</Link>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div></Link>
         ))}
       </div>
@@ -614,6 +748,9 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
     try {
       await axios.post(`${API_URL}/${sessionId}/characters`, { characterId: character.id });
       onDataChange(); // Tell the App to refetch all data
+      // Also refresh the character data directly
+      const res = await axios.get(`${CHAR_API_URL}/${charId}`);
+      setCharacter(res.data);
     } catch (err) {
       console.error("Error adding session to character:", err);
       alert(err.response?.data?.message || "Could not add session.");
@@ -624,6 +761,9 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
     try {
       await axios.delete(`${API_URL}/${sessionId}/characters/${character.id}`);
       onDataChange(); // Tell the App to refetch all data
+      // Also refresh the character data directly
+      const res = await axios.get(`${CHAR_API_URL}/${charId}`);
+      setCharacter(res.data);
     } catch (err) {
       console.error("Error removing session from character:", err);
     }
@@ -643,24 +783,26 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
   }
 
   return (
-    <div className="character-detail-page">
+    <div>
       {isEditing ? (
         <CharacterForm
           character={character}
           onSave={handleSaveWrapper}
           onCancel={() => setIsEditing(false)}
           notes={notes}
+          characters={[]} // Pass empty array as it's not needed for edit form
         />
       ) : (
         <div className="character-detail-layout">
           <div className="character-detail-main">
             <div className="page-header">
-              <h2>{character.name}</h2>
+              <h2><span className="character-name-label">Character Name:</span> {character.name}</h2>
               <div className="header-actions-group">
                 <button className="btn btn-secondary" onClick={() => setIsEditing(true)}>Edit</button>
-                <button className="btn btn-danger" onClick={handleDelete}>Delete</button> {/* This needs styling */}
+                <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
               </div>
             </div>
+
             <div className="character-stats">
               <span><strong>Race:</strong> {character.race}</span>
               <span><strong>Class:</strong> {character.class}</span>
@@ -668,37 +810,43 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
               <span><strong>Status:</strong> {character.status}</span>
               <span><strong>Location:</strong> {character.location}</span>
             </div>
-            <h3>Backstory & Notes</h3>
-            <div className="markdown-content">
-              <ReactMarkdown rehypePlugins={[rehypeRaw]}>{character.backstory}</ReactMarkdown>
-            </div>
-            <hr />
-            <div className="page-header">
-              <h3>Related Sessions</h3>
-              {availableSessions.length > 0 && (
-                <div className="add-character-to-session">
-                  <select
-                    onChange={(e) => addSessionToCharacter(e.target.value)}
-                    value=""
-                    className="btn btn-secondary"
-                  >
-                    <option value="" disabled>+ Add to Session</option>
-                    {availableSessions.map(note => <option key={note.id} value={note.id}>{note.title}</option>)}
-                  </select>
-                </div>
-              )}
-            </div>
-            {character.sessions && character.sessions.length > 0 ? (
-              <div className="related-items-list">
-                {character.sessions.map(session => (
-                  <span key={session.id} className="related-item-pill editable">
-                    <Link to={`/notes/${session.id}`}>{session.title}</Link>
-                    <button className="pill-close" onClick={() => removeSessionFromCharacter(session.id)}>&times;</button>
-                  </span>
-                ))}
+
+            <div className="card">
+              <h3>Backstory & Notes</h3>
+              <div className="markdown-content">
+                <ReactMarkdown rehypePlugins={[rehypeRaw]}>{character.backstory}</ReactMarkdown>
               </div>
-            ) : <p>This character has not appeared in any sessions yet.</p>}
+            </div>
+
+            <div className="card">
+              <div className="page-header">
+                <h3>Related Sessions</h3>
+                {availableSessions.length > 0 && (
+                  <div className="add-character-to-session">
+                    <select
+                      onChange={(e) => addSessionToCharacter(e.target.value)}
+                      value=""
+                      className="btn btn-primary"
+                    >
+                      <option value="" disabled>+ Add to Session</option>
+                      {availableSessions.map(note => <option key={note.id} value={note.id}>{note.title}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+              {character.sessions && character.sessions.length > 0 ? (
+                <div className="related-items-list">
+                  {character.sessions.map(session => (
+                    <span key={session.id} className="related-item-pill editable">
+                      <Link to={`/notes/${session.id}`}>{session.title}</Link>
+                      <button className="pill-close" onClick={() => removeSessionFromCharacter(session.id)}>&times;</button>
+                    </span>
+                  ))}
+                </div>
+              ) : <p>This character has not appeared in any sessions yet.</p>}
+            </div>
           </div>
+          
           <div className="character-detail-sidebar">
             {character.imageUrl && (
               <div className="character-portrait-container">
@@ -718,7 +866,7 @@ function AddCharacterPage({ onSaveCharacter, notes, characters }) {
   const handleSave = async (charData) => {
     const newChar = await onSaveCharacter(charData);
     if (newChar) {
-      navigate('/characters'); // Navigate to the characters list
+      navigate(`/characters/${newChar.id}`); // Navigate to the new character's detail page
     }
   };
 
@@ -752,14 +900,21 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
     const fetchNote = async () => {
       try {
         const res = await axios.get(`${API_URL}/${noteId}`);
-        setNote(res.data);
+        const fetchedNote = res.data;
+        
+        // Calculate session number based on chronological order (ascending by date)
+        const sortedByDate = [...notes].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const noteIndex = sortedByDate.findIndex(n => n.id == noteId); // Use == for type coercion
+        const sessionNumber = noteIndex >= 0 ? noteIndex + 1 : 1;
+        
+        setNote({ ...fetchedNote, sessionNumber });
       } catch (err) {
         console.error("Error fetching note details:", err);
         setNote(null);
       }
     };
     fetchNote();
-  }, [noteId, isEditing]);
+  }, [noteId, isEditing, notes]);
 
   const handleDelete = async () => {
     if (note) {
@@ -1134,70 +1289,5 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
   );
 }
 
-// --- Reusable Column Filter Component ---
-function ColumnFilter({ columnKey, options, onChange, value }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const filterRef = React.useRef(null);
-
-  const filteredOptions = options.filter(opt =>
-    opt.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleSelect = (option) => {
-    onChange(columnKey, option);
-    setIsOpen(false);
-    setSearchTerm('');
-  };
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (filterRef.current && !filterRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  return (
-    <div className="filter-wrapper" ref={filterRef}>
-      <span
-        className={`filter-icon ${value ? 'active' : ''}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          setIsOpen(!isOpen);
-        }}
-      >
-        &#9662; {/* Down arrow */}
-      </span>
-      {isOpen && (
-        <div className="filter-dropdown">
-          <input
-            type="text"
-            className="filter-search"
-            placeholder="Search..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onClick={e => e.stopPropagation()}
-          />
-          <ul className="filter-list">
-            <li onClick={() => handleSelect('')}>-- All --</li>
-            {filteredOptions.map(opt => (
-              <li
-                key={opt}
-                onClick={() => handleSelect(opt)}
-                className={opt === value ? 'selected' : ''}
-              >
-                {opt}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default App;
