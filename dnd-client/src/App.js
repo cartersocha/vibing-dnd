@@ -4,6 +4,8 @@ import axios from 'axios';
 import './App.css';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 
 const API_URL = 'http://localhost:5001/api/notes';
 const CHAR_API_URL = 'http://localhost:5001/api/characters';
@@ -154,66 +156,72 @@ function App() {
           <nav className="main-nav">
             <Link to="/">Home</Link>
             <Link to="/characters">Characters</Link>
+            <Link to="/calendar">Calendar</Link>
             <Link to="/sessions">Sessions</Link>
           </nav>
           <Link to="/sessions/new" className="btn-primary">+ Add Session</Link>
         </div>
       </header>
 
-      <main className="container">
+      <main className="app-main">
         <Routes>
-          <Route
-            path="/"
-            element={
+          <Route path="/" element={
+            <div className="container">
               <HomePage
                 recentNotes={recentNotes}
               />
-            }
-          />
+            </div>
+          } />
           <Route path="/sessions" element={
+            <div className="container">
               <AllSessionsPage
                 notes={notes}
               />
-            }
-          />
+            </div>
+          } />
           <Route
-            path="/characters" element={<CharactersPage characters={characters} />}
-          />
+            path="/characters"
+            element={<div className="container"><CharactersPage characters={characters} /></div>} />
           <Route
             path="/characters/new"
             element={
-              <AddCharacterPage onSaveCharacter={handleSaveCharacter} notes={notes} characters={characters} />
-            }
-          />
+              <div className="container"><AddCharacterPage onSaveCharacter={handleSaveCharacter} notes={notes} characters={characters} /></div>
+            } />
           <Route
             path="/characters/:charId"
             element={
-              <CharacterDetailPage
-                notes={notes}
-                onSaveCharacter={handleSaveCharacter}
-                onDeleteCharacter={handleDeleteCharacter}
-                onDataChange={handleDataChange}
-              />
-            }
-          />
+              <div className="container">
+                <CharacterDetailPage
+                  notes={notes}
+                  onSaveCharacter={handleSaveCharacter}
+                  onDeleteCharacter={handleDeleteCharacter}
+                  onDataChange={handleDataChange}
+                />
+              </div>
+            } />
           <Route
             path="/sessions/new"
             element={
-              <AddNotePage onSaveNote={handleSaveNote} />
-            }
-          />
+              <div className="container"><AddNotePage onSaveNote={handleSaveNote} /></div>
+            } />
           <Route
             path="/notes/:noteId"
             element={
-              <NoteDetailPage
-                notes={notes}
-                characters={characters}
-                onSaveNote={handleSaveNote}
-                onDeleteNote={handleDeleteNote}
-                onDataChange={handleDataChange}
-              />
-            }
-          />
+              <div className="container">
+                <NoteDetailPage
+                  notes={notes}
+                  characters={characters}
+                  onSaveNote={handleSaveNote}
+                  onDeleteNote={handleDeleteNote}
+                  onDataChange={handleDataChange}
+                />
+              </div>
+            } />
+          <Route
+            path="/calendar"
+            element={
+              <CalendarPage notes={notes} />
+            } />
         </Routes>
       </main>
     </div>
@@ -411,6 +419,93 @@ function AllSessionsPage({ notes }) {
           </div></Link>
         ))}
       </div>
+    </section>
+  );
+}
+
+function CalendarPage({ notes }) {
+  const navigate = useNavigate();
+  const [activeDate, setActiveDate] = useState(null);
+  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
+  const [sessionsForPopup, setSessionsForPopup] = useState([]);
+
+  // Create a lookup map for session dates for efficient access
+  const sessionDateMap = React.useMemo(() => {
+    const map = new Map();
+    notes.forEach(note => {
+      if (note.date) {
+        // Normalize date to ignore time zones and time parts
+        const dateKey = new Date(note.date).toDateString();
+        if (!map.has(dateKey)) {
+          map.set(dateKey, []);
+        }
+        map.get(dateKey).push(note);
+      }
+    });
+    return map;
+  }, [notes]);
+
+  const handleMouseEnter = (event, date) => {
+    const dateKey = date.toDateString();
+    if (sessionDateMap.has(dateKey)) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setPopupPosition({ top: rect.bottom + window.scrollY + 5, left: rect.left + window.scrollX });
+      setSessionsForPopup(sessionDateMap.get(dateKey));
+      setActiveDate(date);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setActiveDate(null);
+    setSessionsForPopup([]);
+  };
+
+  const tileContent = ({ date, view }) => {
+    if (view === 'month') {
+      const dateKey = date.toDateString();
+      if (sessionDateMap.has(dateKey)) {
+        return (
+          <div className="session-marker-wrapper" onMouseEnter={(e) => handleMouseEnter(e, date)} onMouseLeave={handleMouseLeave}>
+            <div className="session-marker"></div>
+          </div>
+        );
+      }
+    }
+    return null;
+  };
+
+  const handleDayClick = (value) => {
+    const dateKey = value.toDateString();
+    if (sessionDateMap.has(dateKey)) {
+      const sessionsOnDay = sessionDateMap.get(dateKey);
+      // Navigate to the first session on that day
+      navigate(`/notes/${sessionsOnDay[0].id}`);
+    }
+  };
+
+  return (
+    <section>
+      <div className="page-header">
+        <h2>Campaign Calendar</h2>
+      </div>
+      <div className="calendar-container">
+        <Calendar
+          tileContent={tileContent}
+          onClickDay={handleDayClick}
+        />
+      </div>
+      {activeDate && sessionsForPopup.length > 0 && (
+        <div className="calendar-popup" style={{ top: `${popupPosition.top}px`, left: `${popupPosition.left}px` }}>
+          <div className="calendar-popup-header">
+            {activeDate.toLocaleDateString()}
+          </div>
+          <ul>
+            {sessionsForPopup.map(session => (
+              <li key={session.id}>{session.title}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

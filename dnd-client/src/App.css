@@ -21,6 +21,11 @@ body {
   text-align: left;
 }
 
+.app-main {
+  display: flex;
+  flex-direction: column;
+}
+
 .app-header {
   background-color: var(--header-bg);
   color: var(--header-text);
@@ -484,4 +489,60 @@ hr {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+/* Calendar Styles */
+.calendar-container {
+  /* Make the container grow to fill the space */
+  flex-grow: 1;
+  display: flex;
+}
+
+/* Override default calendar page styles for full-page view */
+.container-full-width .page-header {
+  padding: 0 2rem;
+}
+
+.react-calendar {
+  width: 100%;
+  border: none;
+  font-size: 1.1rem;
+  font-family: 'Merriweather', serif;
+  /* Make the calendar itself grow */
+  flex-grow: 1;
+}
+
+.react-calendar__navigation button {
+  font-family: 'IM Fell English', serif;
+  font-size: 1.2rem;
+  color: var(--accent-color);
+}
+
+.react-calendar__month-view__weekdays__weekday {
+  font-family: 'IM Fell English', serif;
+  color: var(--accent-color);
+  text-decoration: none;
+}
+
+.react-calendar__tile {
+  border-radius: 3px;
+  padding: 1em 0.5em;
+}
+
+.react-calendar__tile:enabled:hover,
+.react-calendar__tile:enabled:focus {
+  background-color: #f8f3e8;
+}
+
+.react-calendar__tile--now {
+  background-color: #e8e1d1;
+}
+
+.session-marker {
+  height: 8px;
+  width: 8px;
+  background-color: var(--accent-color);
+  border-radius: 50%;
+  margin: 0 auto;
+  margin-top: 4px;
 }
