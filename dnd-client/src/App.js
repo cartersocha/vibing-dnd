@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './App.css';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
 
 const API_URL = 'http://localhost:5001/api/notes';
 const CHAR_API_URL = 'http://localhost:5001/api/characters';
@@ -180,14 +182,13 @@ function App() {
           <Route
             path="/characters/new"
             element={
-              <AddCharacterPage onSaveCharacter={handleSaveCharacter} notes={notes} />
+              <AddCharacterPage onSaveCharacter={handleSaveCharacter} notes={notes} characters={characters} />
             }
           />
           <Route
             path="/characters/:charId"
             element={
               <CharacterDetailPage
-                characters={characters}
                 notes={notes}
                 onSaveCharacter={handleSaveCharacter}
                 onDeleteCharacter={handleDeleteCharacter}
@@ -206,6 +207,7 @@ function App() {
             element={
               <NoteDetailPage
                 notes={notes}
+                characters={characters}
                 onSaveNote={handleSaveNote}
                 onDeleteNote={handleDeleteNote}
                 onDataChange={handleDataChange}
@@ -316,6 +318,12 @@ function CharactersPage({ characters }) {
                 <ColumnFilter columnKey="class" options={getColumnOptions('class')} onChange={handleFilterChange} value={columnFilters.class} />
               </div>
             </th>
+            <th onClick={(e) => handleSort(e, 'playerType')}>
+              <div className="th-content">
+                <span>Type{getSortIndicator('playerType')}</span>
+                <ColumnFilter columnKey="playerType" options={getColumnOptions('playerType')} onChange={handleFilterChange} value={columnFilters.playerType} />
+              </div>
+            </th>
             <th onClick={(e) => handleSort(e, 'status')}>Status{getSortIndicator('status')}</th>
             <th onClick={(e) => handleSort(e, 'location')}>Last Known Location{getSortIndicator('location')}</th>
           </tr>
@@ -327,12 +335,13 @@ function CharactersPage({ characters }) {
                 <td>{char.name}</td>
                 <td>{char.race}</td>
                 <td>{char.class}</td>
+                <td>{char.playerType}</td>
                 <td>{char.status}</td>
                 <td>{char.location}</td>
               </tr>
             ))
           ) : (
-            <tr><td colSpan="5">No characters match the current filters.</td></tr>
+            <tr><td colSpan="6">No characters match the current filters.</td></tr>
           )}
         </tbody>
       </table>
@@ -349,7 +358,10 @@ function HomePage({ recentNotes }) {
           recentNotes.map(note => (
             <Link to={`/notes/${note.id}`} key={note.id} className="note-link">
               <div className="note-card-summary">
-                <h3>{note.title}</h3>
+                <div className="page-header">
+                  <h3>{note.title}</h3>
+                  {note.date && <span className="session-date">{new Date(note.date).toLocaleDateString()}</span>}
+                </div>
                 <p>{note.content.substring(0, 100)}...</p>
               </div>
             </Link>
@@ -361,14 +373,41 @@ function HomePage({ recentNotes }) {
 }
 
 function AllSessionsPage({ notes }) {
+  const [sortOrder, setSortOrder] = useState('desc'); // 'desc' for newest, 'asc' for oldest
+
+  const sortedNotes = React.useMemo(() => {
+    const sortableNotes = [...notes];
+    sortableNotes.sort((a, b) => {
+      if (sortOrder === 'asc') {
+        return a.id - b.id; // Oldest first
+      }
+      return b.id - a.id; // Newest first
+    });
+    return sortableNotes;
+  }, [notes, sortOrder]);
+
+  const toggleSortOrder = () => {
+    setSortOrder(prevOrder => (prevOrder === 'desc' ? 'asc' : 'desc'));
+  };
+
   return (
     <section className="all-sessions-page">
-      <h2>Full Campaign Log</h2>
+      <div className="page-header">
+        <h2>Full Campaign Log</h2>
+        <button onClick={toggleSortOrder} className="btn-secondary">
+          Sort: {sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
+        </button>
+      </div>
       <div className="note-list-full">
-        {notes.map(note => (
+        {sortedNotes.map(note => (
           <Link to={`/notes/${note.id}`} key={note.id} className="note-link"><div className="note-card-full">
-            <h3>{note.title}</h3>
-            <p>{note.content.substring(0, 200)}...</p>
+            <div className="page-header">
+              <h3>{note.title}</h3>
+              {note.date && <span className="session-date">{new Date(note.date).toLocaleDateString()}</span>}
+            </div>
+            <div className="markdown-content">
+              <ReactMarkdown rehypePlugins={[rehypeRaw]}>{`${note.content.substring(0, 200)}...`}</ReactMarkdown>
+            </div>
           </div></Link>
         ))}
       </div>
@@ -376,11 +415,24 @@ function AllSessionsPage({ notes }) {
   );
 }
 
-function CharacterDetailPage({ characters, notes, onSaveCharacter, onDeleteCharacter, onDataChange }) {
+function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onDataChange }) {
   const { charId } = useParams();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
-  const character = characters.find(c => c.id === Number(charId)); // Now gets character from props
+  const [character, setCharacter] = useState(null);
+
+  useEffect(() => {
+    const fetchCharacter = async () => {
+      try {
+        const res = await axios.get(`${CHAR_API_URL}/${charId}`);
+        setCharacter(res.data);
+      } catch (err) {
+        console.error("Error fetching character details:", err);
+        setCharacter(null);
+      }
+    };
+    fetchCharacter();
+  }, [charId, isEditing]);
 
   const handleDelete = async () => {
     if (character) {
@@ -420,6 +472,10 @@ function CharacterDetailPage({ characters, notes, onSaveCharacter, onDeleteChara
     note => !character?.sessions?.some(cs => cs.id === note.id)
   );
 
+  if (character === null) {
+    return <h2>Loading Character...</h2>;
+  }
+
   if (!character) {
     return <h2>Character not found. <Link to="/characters">Return to List</Link></h2>;
   }
@@ -434,60 +490,67 @@ function CharacterDetailPage({ characters, notes, onSaveCharacter, onDeleteChara
           notes={notes}
         />
       ) : (
-        <div className="character-detail-card">
-          <div className="page-header">
-            <h2>{character.name}</h2>
-            <div className="note-actions">
-              <button className="btn-primary" onClick={() => setIsEditing(true)}>Edit</button>
-              <button className="btn-danger" onClick={handleDelete}>Delete</button>
+        <div className="character-detail-layout">
+          <div className="character-detail-main">
+            <div className="page-header">
+              <h2>{character.name}</h2>
+              <div className="note-actions">
+                <button className="btn-primary" onClick={() => setIsEditing(true)}>Edit</button>
+                <button className="btn-danger" onClick={handleDelete}>Delete</button>
+              </div>
             </div>
-          </div>
-          {character.imageUrl && (
-            <div className="character-portrait-container">
-              <img src={`http://localhost:5001${character.imageUrl}`} alt={character.name} className="character-portrait-large" />
+            <div className="character-stats">
+              <span><strong>Race:</strong> {character.race}</span>
+              <span><strong>Class:</strong> {character.class}</span>
+              <span><strong>Type:</strong> {character.playerType}</span>
+              <span><strong>Status:</strong> {character.status}</span>
+              <span><strong>Location:</strong> {character.location}</span>
             </div>
-          )}
-          <div className="character-stats">
-            <span><strong>Race:</strong> {character.race}</span>
-            <span><strong>Class:</strong> {character.class}</span>
-            <span><strong>Status:</strong> {character.status}</span>
-            <span><strong>Location:</strong> {character.location}</span>
+            <h3>Backstory & Notes</h3>
+            <div className="markdown-content">
+              <ReactMarkdown rehypePlugins={[rehypeRaw]}>{character.backstory}</ReactMarkdown>
+            </div>
+            <hr />
+            <div className="page-header">
+              <h3>Related Sessions</h3>
+              {availableSessions.length > 0 && (
+                <div className="add-character-to-session">
+                  <select
+                    onChange={(e) => addSessionToCharacter(e.target.value)}
+                    value=""
+                    className="btn-secondary"
+                  >
+                    <option value="" disabled>+ Add to Session</option>
+                    {availableSessions.map(note => <option key={note.id} value={note.id}>{note.title}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+            {character.sessions && character.sessions.length > 0 ? (
+              <div className="related-items-list">
+                {character.sessions.map(session => (
+                  <span key={session.id} className="related-item-pill editable">
+                    <Link to={`/notes/${session.id}`}>{session.title}</Link>
+                    <button className="pill-close" onClick={() => removeSessionFromCharacter(session.id)}>&times;</button>
+                  </span>
+                ))}
+              </div>
+            ) : <p>This character has not appeared in any sessions yet.</p>}
           </div>
-          <h3>Backstory & Notes</h3>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{character.backstory}</p>
-          <hr />
-          <div className="page-header">
-            <h3>Related Sessions</h3>
-            {availableSessions.length > 0 && (
-              <div className="add-character-to-session">
-                <select
-                  onChange={(e) => addSessionToCharacter(e.target.value)}
-                  value=""
-                  className="btn-secondary"
-                >
-                  <option value="" disabled>+ Add to Session</option>
-                  {availableSessions.map(note => <option key={note.id} value={note.id}>{note.title}</option>)}
-                </select>
+          <div className="character-detail-sidebar">
+            {character.imageUrl && (
+              <div className="character-portrait-container">
+                <img src={`http://localhost:5001${character.imageUrl}`} alt={character.name} className="character-portrait-large" />
               </div>
             )}
           </div>
-          {character.sessions && character.sessions.length > 0 ? (
-            <div className="related-items-list">
-              {character.sessions.map(session => (
-                <span key={session.id} className="related-item-pill editable">
-                  <Link to={`/notes/${session.id}`}>{session.title}</Link>
-                  <button className="pill-close" onClick={() => removeSessionFromCharacter(session.id)}>&times;</button>
-                </span>
-              ))}
-            </div>
-          ) : <p>This character has not appeared in any sessions yet.</p>}
         </div>
       )}
     </div>
   );
 }
 
-function AddCharacterPage({ onSaveCharacter, notes }) {
+function AddCharacterPage({ onSaveCharacter, notes, characters }) {
   const navigate = useNavigate();
 
   const handleSave = async (charData) => {
@@ -498,7 +561,7 @@ function AddCharacterPage({ onSaveCharacter, notes }) {
   };
 
   return (
-    <CharacterForm character={{}} onSave={handleSave} onCancel={() => navigate('/characters')} notes={notes} />
+    <CharacterForm character={{}} onSave={handleSave} onCancel={() => navigate('/characters')} notes={notes} characters={characters} />
   );
 }
 
@@ -521,7 +584,20 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
   const { noteId } = useParams();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
-  const note = notes.find(n => n.id === Number(noteId)); // Now gets note from props
+  const [note, setNote] = useState(null);
+
+  useEffect(() => {
+    const fetchNote = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/${noteId}`);
+        setNote(res.data);
+      } catch (err) {
+        console.error("Error fetching note details:", err);
+        setNote(null);
+      }
+    };
+    fetchNote();
+  }, [noteId, isEditing]);
 
   const handleDelete = async () => {
     if (note) {
@@ -540,7 +616,10 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
   const addCharacterToSession = async (characterId) => {
     try {
       await axios.post(`${API_URL}/${noteId}/characters`, { characterId: Number(characterId) });
-      onDataChange(); // Tell the App to refetch all data
+      // Refetch this specific note's data to show the new character
+      const res = await axios.get(`${API_URL}/${noteId}`);
+      setNote(res.data);
+      onDataChange(); // Also refresh the main character list in App for other components
     } catch (err) {
       console.error("Error adding character to session:", err);
       alert(err.response?.data?.message || "Could not add character.");
@@ -550,7 +629,10 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
   const removeCharacterFromSession = async (characterId) => {
     try {
       await axios.delete(`${API_URL}/${noteId}/characters/${characterId}`);
-      onDataChange(); // Tell the App to refetch all data
+      // Refetch this specific note's data to show the character was removed
+      const res = await axios.get(`${API_URL}/${noteId}`);
+      setNote(res.data);
+      onDataChange(); // Also refresh the main character list in App for other components
     } catch (err) {
       console.error("Error removing character from session:", err);
     }
@@ -559,6 +641,10 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
   const availableCharacters = characters.filter(
     char => !note?.characters?.some(nc => nc.id === char.id)
   );
+
+  if (note === null) {
+    return <h2>Loading Session...</h2>;
+  }
 
   if (!note) {
     return <h2>Note not found. <Link to="/">Go Home</Link></h2>;
@@ -575,13 +661,18 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
       ) : (
         <div className="note-card-full">
           <div className="page-header">
-            <h2>{note.title}</h2>
+            <div>
+              <h2>{note.title}</h2>
+              {note.date && <p className="session-date-header">{new Date(note.date).toLocaleDateString()}</p>}
+            </div>
             <div className="note-actions">
               <button className="btn-primary" onClick={() => setIsEditing(true)}>Edit</button>
               <button className="btn-danger" onClick={handleDelete}>Delete</button>
             </div>
           </div>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{note.content}</p>
+          <div className="markdown-content">
+            <ReactMarkdown rehypePlugins={[rehypeRaw]}>{note.content}</ReactMarkdown>
+          </div>
           <hr />
           <div className="page-header">
             <h3>Characters in this Session</h3>
@@ -620,37 +711,57 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
 // --- Reusable Form Component ---
 function NoteForm({ note, onSave, onCancel }) {
   const [title, setTitle] = useState(note.title || '');
+  const [date, setDate] = useState(note.date || new Date().toISOString().split('T')[0]);
   const [content, setContent] = useState(note.content || '');
 
   useEffect(() => {
     setTitle(note.title || '');
+    setDate(note.date || new Date().toISOString().split('T')[0]);
     setContent(note.content || '');
   }, [note]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const saveData = async () => {
-      await onSave({ title, content });
+      await onSave({ title, date, content });
     };
     saveData();
   };
 
   return (
     <form onSubmit={handleSubmit} className="note-form">
-      <h3>{note.id ? 'Edit Note' : 'Create New Note'}</h3>
-      <input
-        type="text"
-        placeholder="Session Title"
-        value={title}
-        onChange={e => setTitle(e.target.value)}
-        required
-      />
-      <textarea
-        placeholder="Session details..."
-        value={content}
-        onChange={e => setContent(e.target.value)}
-        required
-      />
+      {note.id && <h3>Edit Note</h3>}
+      <div className="form-grid">
+        <div className="form-field">
+          <label htmlFor="note-title">Session Title</label>
+          <input
+            id="note-title"
+            type="text"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            required
+          />
+        </div>
+        <div className="form-field">
+          <label htmlFor="note-date">Session Date</label>
+          <input
+            id="note-date"
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            required
+          />
+        </div>
+      </div>
+      <div className="form-field">
+        <label htmlFor="note-content">Session Details</label>
+        <textarea
+          id="note-content"
+          value={content}
+          onChange={e => setContent(e.target.value)}
+          required
+        />
+      </div>
       <div className="form-actions">
         <button type="submit" className="btn-primary">Save Note</button>
         <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
@@ -660,12 +771,13 @@ function NoteForm({ note, onSave, onCancel }) {
 }
 
 // --- Reusable Character Form Component ---
-function CharacterForm({ character, onSave, onCancel, notes = [] }) {
+function CharacterForm({ character, onSave, onCancel, notes = [], characters = [] }) {
   const [name, setName] = useState(character.name || '');
-  const [status, setStatus] = useState(character.status || '');
+  const [status, setStatus] = useState(character.status || 'Alive');
   const [location, setLocation] = useState(character.location || '');
   const [race, setRace] = useState(character.race || '');
   const [charClass, setCharClass] = useState(character.class || '');
+  const [playerType, setPlayerType] = useState(character.playerType || 'Player');
   const [backstory, setBackstory] = useState(character.backstory || '');
   const [selectedSessions, setSelectedSessions] = useState(character.sessions?.map(s => s.id) || []);
   const [imageFile, setImageFile] = useState(null);
@@ -690,12 +802,12 @@ function CharacterForm({ character, onSave, onCancel, notes = [] }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave({ name, status, location, race, class: charClass, backstory, sessionIds: selectedSessions, image: imageFile });
+    onSave({ name, status, location, race, class: charClass, playerType, backstory, sessionIds: selectedSessions, image: imageFile });
   };
 
   return (
     <form onSubmit={handleSubmit} className="note-form">
-      <h3>{character.id ? 'Edit Character' : 'Create New Character'}</h3>
+      {character.id && <h3>Edit Character</h3>}
       <div className="form-section character-image-section">
         {imagePreview && <img src={imagePreview} alt="Character preview" className="character-image-preview" />}
         <div className="image-upload-wrapper">
@@ -709,39 +821,63 @@ function CharacterForm({ character, onSave, onCancel, notes = [] }) {
         </div>
       </div>
       <div className="form-grid">
-        <input
-          type="text"
-          placeholder="Character Name"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          required
-        />
-        <input
-          type="text"
-          placeholder="Status (e.g., Alive, Missing)"
-          value={status}
-          onChange={e => setStatus(e.target.value)}
-        />
-        <input
-          type="text"
-          placeholder="Last Known Location"
-          value={location}
-          onChange={e => setLocation(e.target.value)}
-        />
-        <select value={race} onChange={e => setRace(e.target.value)} required>
-          <option value="" disabled>Select a Race</option>
-          {races.map(r => <option key={r} value={r}>{r}</option>)}
-        </select>
-        <select value={charClass} onChange={e => setCharClass(e.target.value)} required>
-          <option value="" disabled>Select a Class</option>
-          {classes.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <div className="form-field">
+          <label htmlFor="char-name">Character Name</label>
+          <input
+            id="char-name"
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            required
+          />
+        </div>
+        <div className="form-field">
+          <label htmlFor="char-status">Status</label>
+          <select id="char-status" value={status} onChange={e => setStatus(e.target.value)} required>
+            <option value="Alive">Alive</option>
+            <option value="Dead">Dead</option>
+            <option value="Missing">Missing</option>
+          </select>
+        </div>
+        <div className="form-field">
+          <label htmlFor="char-location">Last Known Location</label>
+          <input
+            id="char-location"
+            type="text"
+            value={location}
+            onChange={e => setLocation(e.target.value)}
+          />
+        </div>
+        <div className="form-field">
+          <label htmlFor="char-race">Race</label>
+          <select id="char-race" value={race} onChange={e => setRace(e.target.value)} required>
+            <option value="" disabled>Select a Race</option>
+            {races.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+        <div className="form-field">
+          <label htmlFor="char-class">Class</label>
+          <select id="char-class" value={charClass} onChange={e => setCharClass(e.target.value)} required>
+            <option value="" disabled>Select a Class</option>
+            {classes.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="form-field">
+          <label htmlFor="char-type">Player Type</label>
+          <select id="char-type" value={playerType} onChange={e => setPlayerType(e.target.value)} required>
+            <option value="Player">Player</option>
+            <option value="Non-Player">Non-Player</option>
+          </select>
+        </div>
       </div>
-      <textarea
-        placeholder="Backstory, notes, and other details..."
-        value={backstory}
-        onChange={e => setBackstory(e.target.value)}
-      />
+      <div className="form-field">
+        <label htmlFor="char-backstory">Backstory & Notes</label>
+        <textarea
+          id="char-backstory"
+          value={backstory}
+          onChange={e => setBackstory(e.target.value)}
+        />
+      </div>
       <div className="form-section form-section-flush-header">
         <div className="page-header">
           <h4>Link to Sessions</h4>

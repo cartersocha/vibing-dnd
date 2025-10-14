@@ -27,13 +27,13 @@ const upload = multer({
 
 // --- In-Memory Database ---
 let notes = [
-  { id: 1, title: 'Session 1: A Fateful Meeting', content: 'Our heroes met in the Prancing Pony tavern, unaware of the adventure that awaited them.' },
-  { id: 2, title: 'Session 2: The Goblin Ambush', content: 'Traveling north, the party was ambushed by a band of goblins. They discovered a strange map on the leader.' },
-  { id: 3, title: 'Session 3: The Whispering Cave', content: 'The map led to a dark cave, from which strange whispers could be heard on the wind.' },
-  { id: 4, title: 'Session 4: The Cultist\'s Ritual', content: 'Deep inside the cave, the party stumbled upon a group of cultists performing a dark ritual.' },
+  { id: 1, title: 'Session 1: A Fateful Meeting', date: '2024-05-01', content: 'Our heroes met in the Prancing Pony tavern, unaware of the adventure that awaited them.' },
+  { id: 2, title: 'Session 2: The Goblin Ambush', date: '2024-05-08', content: 'Traveling north, the party was ambushed by a band of goblins. They discovered a strange map on the leader.' },
+  { id: 3, title: 'Session 3: The Whispering Cave', date: '2024-05-15', content: 'The map led to a dark cave, from which strange whispers could be heard on the wind.' },
+  { id: 4, title: 'Session 4: The Cultist\'s Ritual', date: '2024-05-22', content: 'Deep inside the cave, the party stumbled upon a group of cultists performing a dark ritual.' },
 ];
 let characters = [
-  { id: 1, name: 'Aelar', race: 'Elf', class: 'Ranger', status: 'Active', location: 'Neverwinter', backstory: 'A mysterious ranger from the north.', imageUrl: null }
+  { id: 1, name: 'Aelar', race: 'Elf', class: 'Ranger', status: 'Active', location: 'Neverwinter', backstory: 'A mysterious ranger from the north.', imageUrl: null, playerType: 'Player' }
 ];
 let nextNoteId = 5;
 let nextCharId = 2;
@@ -50,7 +50,7 @@ app.get('/api/notes', (req, res) => res.json(notes));
 
 // POST a new note
 app.post('/api/notes', (req, res) => {
-  const { title, content } = req.body;
+  const { title, content, date } = req.body;
   if (!title || !content) return res.status(400).json({ message: 'Title and content required' });
 
   // Check for duplicate title (case-insensitive)
@@ -61,9 +61,9 @@ app.post('/api/notes', (req, res) => {
   
   // Sanitize input to prevent XSS by stripping all HTML tags
   const sanitizedTitle = sanitizeHtml(title, { allowedTags: [], allowedAttributes: {} });
-  const sanitizedContent = sanitizeHtml(content, { allowedTags: [], allowedAttributes: {} });
+  const sanitizedContent = sanitizeHtml(content); // Use default safe tags for Markdown
 
-  const newNote = { id: nextNoteId++, title: sanitizedTitle, content: sanitizedContent };
+  const newNote = { id: nextNoteId++, title: sanitizedTitle, date: date, content: sanitizedContent };
   notes.push(newNote);
   res.status(201).json(newNote); // Respond with the sanitized note
 });
@@ -88,7 +88,8 @@ app.put('/api/notes/:id', (req, res) => {
   // Sanitize any fields present in the request body
   const sanitizedBody = {};
   if (req.body.title) sanitizedBody.title = sanitizeHtml(req.body.title, { allowedTags: [], allowedAttributes: {} });
-  if (req.body.content) sanitizedBody.content = sanitizeHtml(req.body.content, { allowedTags: [], allowedAttributes: {} });
+  if (req.body.content) sanitizedBody.content = sanitizeHtml(req.body.content); // Use default safe tags
+  if (req.body.date) sanitizedBody.date = sanitizeHtml(req.body.date, { allowedTags: [], allowedAttributes: {} }); // Sanitize and include date
 
   notes[noteIndex] = { ...notes[noteIndex], ...sanitizedBody };
   res.json(notes[noteIndex]);
@@ -134,7 +135,11 @@ app.post('/api/characters', (req, res) => {
 
     const sanitizedBody = {};
     for (const key in req.body) {
-      sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+      if (key === 'backstory') {
+        sanitizedBody[key] = sanitizeHtml(req.body[key]); // Use default safe tags for backstory
+      } else {
+        sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+      }
     }
 
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
@@ -158,7 +163,11 @@ app.put('/api/characters/:id', (req, res) => {
     const sanitizedBody = {};
     for (const key in req.body) {
       if (req.body[key]) {
-        sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+        if (key === 'backstory') {
+          sanitizedBody[key] = sanitizeHtml(req.body[key]); // Use default safe tags
+        } else {
+          sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+        }
       }
     }
 
