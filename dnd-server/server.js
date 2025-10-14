@@ -1,21 +1,47 @@
 const express = require('express');
 const cors = require('cors');
 const sanitizeHtml = require('sanitize-html');
+const multer = require('multer');
+const path = require('path');
 
 const app = express();
 const PORT = 5001;
 
 app.use(cors());
 app.use(express.json());
+// Serve static files from the 'public' directory
+app.use(express.static('public'));
+
+// --- Multer Configuration for File Uploads ---
+const storage = multer.diskStorage({
+  destination: './public/uploads/',
+  filename: function(req, file, cb){
+    cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 10000000 } // 10MB limit
+}).single('image'); // 'image' is the name of the form field
 
 // --- In-Memory Database ---
 let notes = [
-  { id: 1, title: 'Session 1: A Fateful Meeting', content: 'Our heroes met in the Prancing Pony tavern, unaware of the adventure that awaited them.' },
-  { id: 2, title: 'Session 2: The Goblin Ambush', content: 'Traveling north, the party was ambushed by a band of goblins. They discovered a strange map on the leader.' },
-  { id: 3, title: 'Session 3: The Whispering Cave', content: 'The map led to a dark cave, from which strange whispers could be heard on the wind.' },
-  { id: 4, title: 'Session 4: The Cultist\'s Ritual', content: 'Deep inside the cave, the party stumbled upon a group of cultists performing a dark ritual.' },
+  { id: 1, title: 'Session 1: A Fateful Meeting', date: '2024-05-01', content: 'Our heroes met in the Prancing Pony tavern, unaware of the adventure that awaited them.' },
+  { id: 2, title: 'Session 2: The Goblin Ambush', date: '2024-05-08', content: 'Traveling north, the party was ambushed by a band of goblins. They discovered a strange map on the leader.' },
+  { id: 3, title: 'Session 3: The Whispering Cave', date: '2024-05-15', content: 'The map led to a dark cave, from which strange whispers could be heard on the wind.' },
+  { id: 4, title: 'Session 4: The Cultist\'s Ritual', date: '2024-05-22', content: 'Deep inside the cave, the party stumbled upon a group of cultists performing a dark ritual.' },
 ];
-let nextId = 5;
+let characters = [
+  { id: 1, name: 'Aelar', race: 'Elf', class: 'Ranger', status: 'Active', location: 'Neverwinter', backstory: 'A mysterious ranger from the north.', imageUrl: null, playerType: 'Player' }
+];
+let nextNoteId = 5;
+let nextCharId = 2;
+// Link table for Many-to-Many relationship
+let sessionCharacters = [
+  { sessionId: 1, characterId: 1 },
+  { sessionId: 2, characterId: 1 },
+];
 
 // --- API Endpoints ---
 
@@ -24,7 +50,7 @@ app.get('/api/notes', (req, res) => res.json(notes));
 
 // POST a new note
 app.post('/api/notes', (req, res) => {
-  const { title, content } = req.body;
+  const { title, content, date } = req.body;
   if (!title || !content) return res.status(400).json({ message: 'Title and content required' });
 
   // Check for duplicate title (case-insensitive)
@@ -35,9 +61,9 @@ app.post('/api/notes', (req, res) => {
   
   // Sanitize input to prevent XSS by stripping all HTML tags
   const sanitizedTitle = sanitizeHtml(title, { allowedTags: [], allowedAttributes: {} });
-  const sanitizedContent = sanitizeHtml(content, { allowedTags: [], allowedAttributes: {} });
+  const sanitizedContent = sanitizeHtml(content); // Use default safe tags for Markdown
 
-  const newNote = { id: nextId++, title: sanitizedTitle, content: sanitizedContent };
+  const newNote = { id: nextNoteId++, title: sanitizedTitle, date: date, content: sanitizedContent };
   notes.push(newNote);
   res.status(201).json(newNote); // Respond with the sanitized note
 });
@@ -62,16 +88,145 @@ app.put('/api/notes/:id', (req, res) => {
   // Sanitize any fields present in the request body
   const sanitizedBody = {};
   if (req.body.title) sanitizedBody.title = sanitizeHtml(req.body.title, { allowedTags: [], allowedAttributes: {} });
-  if (req.body.content) sanitizedBody.content = sanitizeHtml(req.body.content, { allowedTags: [], allowedAttributes: {} });
+  if (req.body.content) sanitizedBody.content = sanitizeHtml(req.body.content); // Use default safe tags
+  if (req.body.date) sanitizedBody.date = sanitizeHtml(req.body.date, { allowedTags: [], allowedAttributes: {} }); // Sanitize and include date
 
   notes[noteIndex] = { ...notes[noteIndex], ...sanitizedBody };
   res.json(notes[noteIndex]);
+});
+
+// GET a single note with related characters
+app.get('/api/notes/:id', (req, res) => {
+  const noteId = parseInt(req.params.id);
+  const note = notes.find(n => n.id === noteId);
+  if (!note) return res.status(404).json({ message: 'Note not found' });
+
+  const relatedCharacterIds = sessionCharacters
+    .filter(sc => sc.sessionId === noteId)
+    .map(sc => sc.characterId);
+  
+  const relatedCharacters = characters.filter(c => relatedCharacterIds.includes(c.id));
+
+  res.json({ ...note, characters: relatedCharacters });
 });
 
 // DELETE a note
 app.delete('/api/notes/:id', (req, res) => {
   const noteId = parseInt(req.params.id);
   notes = notes.filter(n => n.id !== noteId);
+  res.status(204).send();
+});
+
+// --- CHARACTERS API ---
+
+// GET all characters
+app.get('/api/characters', (req, res) => res.json(characters));
+
+// POST a new character
+app.post('/api/characters', (req, res) => {
+  upload(req, res, (err) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error uploading file.', error: err });
+    }
+    const { name, race, class: charClass } = req.body;
+    if (!name || !race || !charClass) {
+      return res.status(400).json({ message: 'Name, race, and class are required' });
+    }
+
+    const sanitizedBody = {};
+    for (const key in req.body) {
+      if (key === 'backstory') {
+        sanitizedBody[key] = sanitizeHtml(req.body[key]); // Use default safe tags for backstory
+      } else {
+        sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+      }
+    }
+
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    const newChar = { id: nextCharId++, ...sanitizedBody, imageUrl };
+    characters.push(newChar);
+    res.status(201).json(newChar);
+  });
+});
+
+// PUT (update) a character
+app.put('/api/characters/:id', (req, res) => {
+  upload(req, res, (err) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error uploading file.', error: err });
+    }
+    const charId = parseInt(req.params.id);
+    const charIndex = characters.findIndex(c => c.id === charId);
+
+    if (charIndex === -1) return res.status(404).json({ message: 'Character not found' });
+
+    const sanitizedBody = {};
+    for (const key in req.body) {
+      if (req.body[key]) {
+        if (key === 'backstory') {
+          sanitizedBody[key] = sanitizeHtml(req.body[key]); // Use default safe tags
+        } else {
+          sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+        }
+      }
+    }
+
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : characters[charIndex].imageUrl;
+    characters[charIndex] = { ...characters[charIndex], ...sanitizedBody, imageUrl };
+    res.json(characters[charIndex]);
+  });
+});
+
+// GET a single character with related sessions
+app.get('/api/characters/:id', (req, res) => {
+  const charId = parseInt(req.params.id);
+  const character = characters.find(c => c.id === charId);
+  if (!character) return res.status(404).json({ message: 'Character not found' });
+
+  const relatedSessionIds = sessionCharacters
+    .filter(sc => sc.characterId === charId)
+    .map(sc => sc.sessionId);
+
+  const relatedSessions = notes.filter(n => relatedSessionIds.includes(n.id));
+
+  res.json({ ...character, sessions: relatedSessions });
+});
+
+// DELETE a character
+app.delete('/api/characters/:id', (req, res) => {
+  const charId = parseInt(req.params.id);
+  const initialLength = characters.length;
+  characters = characters.filter(c => c.id !== charId);
+
+  if (characters.length === initialLength) {
+    return res.status(404).json({ message: 'Character not found' });
+  }
+  res.status(204).send();
+});
+
+// --- RELATIONSHIP API ---
+
+// Add a character to a session
+app.post('/api/notes/:noteId/characters', (req, res) => {
+  const sessionId = parseInt(req.params.noteId);
+  const { characterId } = req.body;
+
+  const existing = sessionCharacters.find(sc => sc.sessionId === sessionId && sc.characterId === characterId);
+  if (existing) return res.status(409).json({ message: 'Character already in this session' });
+
+  sessionCharacters.push({ sessionId, characterId });
+  res.status(201).json({ message: 'Character added to session' });
+});
+
+// Remove a character from a session
+app.delete('/api/notes/:noteId/characters/:characterId', (req, res) => {
+  const sessionId = parseInt(req.params.noteId);
+  const characterId = parseInt(req.params.characterId);
+
+  sessionCharacters = sessionCharacters.filter(
+    sc => !(sc.sessionId === sessionId && sc.characterId === characterId)
+  );
+
   res.status(204).send();
 });
 
