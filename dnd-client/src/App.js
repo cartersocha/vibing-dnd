@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './App.css';
@@ -10,32 +10,32 @@ function App() {
   const [notes, setNotes] = useState([]);
   const [characters, setCharacters] = useState([]);
   
-  // Fetch all notes from backend
-  useEffect(() => {
-    const fetchNotes = async () => {
-      try {
-        const res = await axios.get(API_URL);
-        // Sort descending by ID (newest first)
-        setNotes(res.data.sort((a, b) => Number(b.id) - Number(a.id)));
-      } catch (err) {
-        console.error('Error fetching notes:', err);
-      }
-    };
-    fetchNotes();
+  const fetchCharacters = useCallback(async () => {
+    try {
+      const res = await axios.get(CHAR_API_URL);
+      // Sort alphabetically by name
+      setCharacters(res.data.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (err) {
+      console.error('Error fetching characters:', err);
+    }
   }, []);
 
-  // Fetch all characters from backend
+  const fetchNotes = useCallback(async () => {
+    try {
+      const res = await axios.get(API_URL);
+      // Sort descending by ID (newest first)
+      setNotes(res.data.sort((a, b) => Number(b.id) - Number(a.id)));
+    } catch (err) {
+      console.error('Error fetching notes:', err);
+    }
+  }, []);
+
+  // Fetch initial data on component mount
   useEffect(() => {
-    const fetchCharacters = async () => {
-      try {
-        const res = await axios.get(CHAR_API_URL);
-        // Sort alphabetically by name
-        setCharacters(res.data.sort((a, b) => a.name.localeCompare(b.name)));
-      } catch (err) {
-        console.error('Error fetching characters:', err);
-      }
-    };
+    fetchNotes();
     fetchCharacters();
+    // The empty dependency array ensures this runs only once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSaveNote = async (noteData) => {
@@ -136,6 +136,11 @@ function App() {
     }
   };
 
+  const handleDataChange = () => {
+    fetchNotes();
+    fetchCharacters();
+  };
+
   const recentNotes = notes.slice(0, 3);
 
   // Main App component now handles routing
@@ -186,6 +191,7 @@ function App() {
                 notes={notes}
                 onSaveCharacter={handleSaveCharacter}
                 onDeleteCharacter={handleDeleteCharacter}
+                onDataChange={handleDataChange}
               />
             }
           />
@@ -200,9 +206,9 @@ function App() {
             element={
               <NoteDetailPage
                 notes={notes}
-                characters={characters}
                 onSaveNote={handleSaveNote}
                 onDeleteNote={handleDeleteNote}
+                onDataChange={handleDataChange}
               />
             }
           />
@@ -370,28 +376,11 @@ function AllSessionsPage({ notes }) {
   );
 }
 
-function CharacterDetailPage({ characters, notes, onSaveCharacter, onDeleteCharacter }) {
+function CharacterDetailPage({ characters, notes, onSaveCharacter, onDeleteCharacter, onDataChange }) {
   const { charId } = useParams();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
-  const [character, setCharacter] = useState(null);
-
-  useEffect(() => {
-    // Don't refetch when we are just exiting edit mode,
-    // as the save handler has already updated the state.
-    if (isEditing) return;
-
-    const fetchCharacter = async () => {
-      try {
-        const res = await axios.get(`${CHAR_API_URL}/${charId}`);
-        setCharacter(res.data);
-      } catch (err) {
-        console.error("Error fetching character details:", err);
-        setCharacter(null); // Set to null on error
-      }
-    };
-    fetchCharacter();
-  }, [charId, isEditing]); // Refetch when ID changes or after editing
+  const character = characters.find(c => c.id === Number(charId)); // Now gets character from props
 
   const handleDelete = async () => {
     if (character) {
@@ -403,19 +392,14 @@ function CharacterDetailPage({ characters, notes, onSaveCharacter, onDeleteChara
   const handleSaveWrapper = async (data) => {
     const saved = await onSaveCharacter({ ...character, ...data });
     if (saved) {
-      // Update local state immediately for responsiveness
-      setCharacter(saved);
       setIsEditing(false);
     }
   };
 
   const addSessionToCharacter = async (sessionId) => {
     try {
-      // The API is structured as adding a character to a session
       await axios.post(`${API_URL}/${sessionId}/characters`, { characterId: character.id });
-      // Refetch character to show updated session list
-      const res = await axios.get(`${CHAR_API_URL}/${charId}`);
-      setCharacter(res.data);
+      onDataChange(); // Tell the App to refetch all data
     } catch (err) {
       console.error("Error adding session to character:", err);
       alert(err.response?.data?.message || "Could not add session.");
@@ -424,11 +408,8 @@ function CharacterDetailPage({ characters, notes, onSaveCharacter, onDeleteChara
 
   const removeSessionFromCharacter = async (sessionId) => {
     try {
-      // The API is structured as removing a character from a session
       await axios.delete(`${API_URL}/${sessionId}/characters/${character.id}`);
-      // Refetch character to show updated session list
-      const res = await axios.get(`${CHAR_API_URL}/${charId}`);
-      setCharacter(res.data);
+      onDataChange(); // Tell the App to refetch all data
     } catch (err) {
       console.error("Error removing session from character:", err);
     }
@@ -438,14 +419,6 @@ function CharacterDetailPage({ characters, notes, onSaveCharacter, onDeleteChara
   const availableSessions = notes.filter(
     note => !character?.sessions?.some(cs => cs.id === note.id)
   );
-
-  if (character === null) {
-    // Differentiate between loading and not found
-    const originalChar = characters.some(c => c.id === Number(charId));
-    if (originalChar) {
-      return <h2>Loading Character...</h2>;
-    }
-  }
 
   if (!character) {
     return <h2>Character not found. <Link to="/characters">Return to List</Link></h2>;
@@ -544,24 +517,11 @@ function AddNotePage({ onSaveNote }) {
   );
 }
 
-function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote }) {
+function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataChange }) {
   const { noteId } = useParams();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
-  const [note, setNote] = useState(null);
-
-  useEffect(() => {
-    const fetchNote = async () => {
-      try {
-        const res = await axios.get(`${API_URL}/${noteId}`);
-        setNote(res.data);
-      } catch (err) {
-        console.error("Error fetching note details:", err);
-        setNote(null);
-      }
-    };
-    fetchNote();
-  }, [noteId, isEditing]);
+  const note = notes.find(n => n.id === Number(noteId)); // Now gets note from props
 
   const handleDelete = async () => {
     if (note) {
@@ -573,7 +533,6 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote }) {
   const handleSaveWrapper = async (data) => {
     const saved = await onSaveNote({ ...note, ...data });
     if (saved) {
-      setNote(saved);
       setIsEditing(false);
     }
   };
@@ -581,9 +540,7 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote }) {
   const addCharacterToSession = async (characterId) => {
     try {
       await axios.post(`${API_URL}/${noteId}/characters`, { characterId: Number(characterId) });
-      // Refetch note to show updated character list
-      const res = await axios.get(`${API_URL}/${noteId}`);
-      setNote(res.data);
+      onDataChange(); // Tell the App to refetch all data
     } catch (err) {
       console.error("Error adding character to session:", err);
       alert(err.response?.data?.message || "Could not add character.");
@@ -593,25 +550,15 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote }) {
   const removeCharacterFromSession = async (characterId) => {
     try {
       await axios.delete(`${API_URL}/${noteId}/characters/${characterId}`);
-      // Refetch note to show updated character list
-      const res = await axios.get(`${API_URL}/${noteId}`);
-      setNote(res.data);
+      onDataChange(); // Tell the App to refetch all data
     } catch (err) {
       console.error("Error removing character from session:", err);
     }
   };
 
   const availableCharacters = characters.filter(
-    char => !note?.characters.some(nc => nc.id === char.id)
+    char => !note?.characters?.some(nc => nc.id === char.id)
   );
-
-  if (note === null) {
-    // Differentiate between loading and not found
-    const originalNote = notes.find(n => n.id === Number(noteId));
-    if (originalNote) {
-      return <h2>Loading Session...</h2>;
-    }
-  }
 
   if (!note) {
     return <h2>Note not found. <Link to="/">Go Home</Link></h2>;

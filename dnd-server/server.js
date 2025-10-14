@@ -94,13 +94,6 @@ app.put('/api/notes/:id', (req, res) => {
   res.json(notes[noteIndex]);
 });
 
-// DELETE a note
-app.delete('/api/notes/:id', (req, res) => {
-  const noteId = parseInt(req.params.id);
-  notes = notes.filter(n => n.id !== noteId);
-  res.status(204).send();
-});
-
 // GET a single note with related characters
 app.get('/api/notes/:id', (req, res) => {
   const noteId = parseInt(req.params.id);
@@ -114,6 +107,13 @@ app.get('/api/notes/:id', (req, res) => {
   const relatedCharacters = characters.filter(c => relatedCharacterIds.includes(c.id));
 
   res.json({ ...note, characters: relatedCharacters });
+});
+
+// DELETE a note
+app.delete('/api/notes/:id', (req, res) => {
+  const noteId = parseInt(req.params.id);
+  notes = notes.filter(n => n.id !== noteId);
+  res.status(204).send();
 });
 
 // --- CHARACTERS API ---
