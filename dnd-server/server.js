@@ -27,10 +27,10 @@ const upload = multer({
 
 // --- In-Memory Database ---
 let notes = [
-  { id: 1, title: 'Session 1: A Fateful Meeting', date: '2024-05-01', content: 'Our heroes met in the Prancing Pony tavern, unaware of the adventure that awaited them.' },
-  { id: 2, title: 'Session 2: The Goblin Ambush', date: '2024-05-08', content: 'Traveling north, the party was ambushed by a band of goblins. They discovered a strange map on the leader.' },
-  { id: 3, title: 'Session 3: The Whispering Cave', date: '2024-05-15', content: 'The map led to a dark cave, from which strange whispers could be heard on the wind.' },
-  { id: 4, title: 'Session 4: The Cultist\'s Ritual', date: '2024-05-22', content: 'Deep inside the cave, the party stumbled upon a group of cultists performing a dark ritual.' },
+  { id: 1, title: 'A Fateful Meeting', date: '2024-05-01', content: 'Our heroes met in the Prancing Pony tavern, unaware of the adventure that awaited them.', imageUrl: null },
+  { id: 2, title: 'The Goblin Ambush', date: '2024-05-08', content: 'Traveling north, the party was ambushed by a band of goblins. They discovered a strange map on the leader.', imageUrl: null },
+  { id: 3, title: 'The Whispering Cave', date: '2024-05-15', content: 'The map led to a dark cave, from which strange whispers could be heard on the wind.', imageUrl: null },
+  { id: 4, title: 'The Cultist\'s Ritual', date: '2024-05-22', content: 'Deep inside the cave, the party stumbled upon a group of cultists performing a dark ritual.', imageUrl: null },
 ];
 let characters = [
   { id: 1, name: 'Aelar', race: 'Elf', class: 'Ranger', status: 'Active', location: 'Neverwinter', backstory: 'A mysterious ranger from the north.', imageUrl: null, playerType: 'Player' }
@@ -46,53 +46,80 @@ let sessionCharacters = [
 // --- API Endpoints ---
 
 // GET all notes
-app.get('/api/notes', (req, res) => res.json(notes));
+app.get('/api/notes', (req, res) => {
+  const notesWithCharacters = notes.map(note => {
+    const relatedCharacterIds = sessionCharacters
+      .filter(sc => sc.sessionId === note.id)
+      .map(sc => sc.characterId);
+    
+    const relatedCharacters = characters.filter(c => relatedCharacterIds.includes(c.id));
+    
+    return { ...note, characters: relatedCharacters };
+  });
+  
+  res.json(notesWithCharacters);
+});
 
 // POST a new note
 app.post('/api/notes', (req, res) => {
-  const { title, content, date } = req.body;
-  if (!title || !content) return res.status(400).json({ message: 'Title and content required' });
+  upload(req, res, (err) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error uploading file.', error: err });
+    }
+    const { title, content, date } = req.body;
+    if (!title || !content) return res.status(400).json({ message: 'Title and content required' });
 
-  // Check for duplicate title (case-insensitive)
-  const existingNote = notes.find(note => note.title.toLowerCase() === title.toLowerCase());
-  if (existingNote) {
-    return res.status(409).json({ message: 'A session with this title already exists.' });
-  }
-  
-  // Sanitize input to prevent XSS by stripping all HTML tags
-  const sanitizedTitle = sanitizeHtml(title, { allowedTags: [], allowedAttributes: {} });
-  const sanitizedContent = sanitizeHtml(content); // Use default safe tags for Markdown
+    const existingNote = notes.find(note => note.title.toLowerCase() === title.toLowerCase());
+    if (existingNote) {
+      return res.status(409).json({ message: 'A session with this title already exists.' });
+    }
+    
+    const sanitizedTitle = sanitizeHtml(title, { allowedTags: [], allowedAttributes: {} });
+    const sanitizedContent = sanitizeHtml(content);
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-  const newNote = { id: nextNoteId++, title: sanitizedTitle, date: date, content: sanitizedContent };
-  notes.push(newNote);
-  res.status(201).json(newNote); // Respond with the sanitized note
+    const newNote = { id: nextNoteId++, title: sanitizedTitle, date, content: sanitizedContent, imageUrl };
+    notes.push(newNote);
+    res.status(201).json(newNote);
+  });
 });
 
 // PUT (update) a note
 app.put('/api/notes/:id', (req, res) => {
-  const noteId = parseInt(req.params.id);
-  const noteIndex = notes.findIndex(n => n.id === noteId);
-
-  if (noteIndex === -1) return res.status(404).json({ message: 'Note not found' });
-
-  // If title is being updated, check for duplicates on other notes
-  if (req.body.title) {
-    const existingNote = notes.find(
-      note => note.title.toLowerCase() === req.body.title.toLowerCase() && note.id !== noteId
-    );
-    if (existingNote) {
-      return res.status(409).json({ message: 'Another session with this title already exists.' });
+  upload(req, res, (err) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error uploading file.', error: err });
     }
-  }
+    const noteId = parseInt(req.params.id);
+    const noteIndex = notes.findIndex(n => n.id === noteId);
 
-  // Sanitize any fields present in the request body
-  const sanitizedBody = {};
-  if (req.body.title) sanitizedBody.title = sanitizeHtml(req.body.title, { allowedTags: [], allowedAttributes: {} });
-  if (req.body.content) sanitizedBody.content = sanitizeHtml(req.body.content); // Use default safe tags
-  if (req.body.date) sanitizedBody.date = sanitizeHtml(req.body.date, { allowedTags: [], allowedAttributes: {} }); // Sanitize and include date
+    if (noteIndex === -1) return res.status(404).json({ message: 'Note not found' });
 
-  notes[noteIndex] = { ...notes[noteIndex], ...sanitizedBody };
-  res.json(notes[noteIndex]);
+    if (req.body.title) {
+      const existingNote = notes.find(
+        note => note.title.toLowerCase() === req.body.title.toLowerCase() && note.id !== noteId
+      );
+      if (existingNote) {
+        return res.status(409).json({ message: 'Another session with this title already exists.' });
+      }
+    }
+
+    const sanitizedBody = {};
+    if (req.body.title) sanitizedBody.title = sanitizeHtml(req.body.title, { allowedTags: [], allowedAttributes: {} });
+    if (req.body.content) sanitizedBody.content = sanitizeHtml(req.body.content);
+    if (req.body.date) sanitizedBody.date = sanitizeHtml(req.body.date, { allowedTags: [], allowedAttributes: {} });
+
+    const existingNote = notes[noteIndex];
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : existingNote.imageUrl;
+
+    notes[noteIndex] = { 
+      ...existingNote, 
+      ...sanitizedBody,
+      imageUrl
+    };
+    
+    res.json(notes[noteIndex]);
+  });
 });
 
 // GET a single note with related characters
@@ -120,7 +147,19 @@ app.delete('/api/notes/:id', (req, res) => {
 // --- CHARACTERS API ---
 
 // GET all characters
-app.get('/api/characters', (req, res) => res.json(characters));
+app.get('/api/characters', (req, res) => {
+  const charactersWithSessions = characters.map(character => {
+    const relatedSessionIds = sessionCharacters
+      .filter(sc => sc.characterId === character.id)
+      .map(sc => sc.sessionId);
+    
+    const relatedSessions = notes.filter(n => relatedSessionIds.includes(n.id));
+    
+    return { ...character, sessions: relatedSessions };
+  });
+  
+  res.json(charactersWithSessions);
+});
 
 // POST a new character
 app.post('/api/characters', (req, res) => {
@@ -155,25 +194,50 @@ app.put('/api/characters/:id', (req, res) => {
     if (err) {
       return res.status(500).json({ message: 'Error uploading file.', error: err });
     }
+    
     const charId = parseInt(req.params.id);
     const charIndex = characters.findIndex(c => c.id === charId);
 
-    if (charIndex === -1) return res.status(404).json({ message: 'Character not found' });
+    if (charIndex === -1) {
+      return res.status(404).json({ message: 'Character not found' });
+    }
 
+    // Start with a copy of the existing character
+    const existingChar = { ...characters[charIndex] };
+
+    // Sanitize the incoming data
     const sanitizedBody = {};
     for (const key in req.body) {
-      if (req.body[key]) {
-        if (key === 'backstory') {
-          sanitizedBody[key] = sanitizeHtml(req.body[key]); // Use default safe tags
-        } else {
-          sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
-        }
+      // Skip empty values unless they're intentionally falsy
+      if (req.body[key] === null || req.body[key] === undefined) continue;
+      
+      if (key === 'backstory') {
+        sanitizedBody[key] = sanitizeHtml(req.body[key]); // Use default safe tags for backstory
+      } else if (key === 'id') {
+        sanitizedBody[key] = parseInt(req.body[key]); // Keep the ID as a number
+      } else {
+        sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
       }
     }
 
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : characters[charIndex].imageUrl;
-    characters[charIndex] = { ...characters[charIndex], ...sanitizedBody, imageUrl };
-    res.json(characters[charIndex]);
+    // Handle the image
+    let imageUrl = existingChar.imageUrl; // Start with existing image
+    if (req.file) {
+      imageUrl = `/uploads/${req.file.filename}`; // Use new uploaded image
+    } else if (sanitizedBody.imageUrl) {
+      imageUrl = sanitizedBody.imageUrl; // Use provided imageUrl
+    }
+
+    // Create the updated character, ensuring ID is preserved
+    const updatedChar = {
+      ...existingChar,
+      ...sanitizedBody,
+      imageUrl
+    };
+
+    // Update in the array
+    characters[charIndex] = updatedChar;
+    res.json(updatedChar);
   });
 });
 

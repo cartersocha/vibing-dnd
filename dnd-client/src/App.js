@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Routes, Route, Link, useParams, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, NavLink, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './App.css';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
-import Calendar from 'react-calendar';
-import 'react-calendar/dist/Calendar.css';
 
 const API_URL = 'http://localhost:5001/api/notes';
 const CHAR_API_URL = 'http://localhost:5001/api/characters';
@@ -46,14 +44,54 @@ function App() {
     try {
       if (noteData.id) {
         // --- UPDATE ---
-        const response = await axios.put(`${API_URL}/${noteData.id}`, noteData);
+        const formData = new FormData();
+        for (const key in noteData) {
+          if (key === 'characters' || key === 'characterIds') continue;
+          if (key === 'image' && !noteData[key]) continue;
+          if (noteData[key] !== undefined) {
+            formData.append(key, noteData[key]);
+          }
+        }
+
+        const response = await axios.put(`${API_URL}/${noteData.id}`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        // Handle relationship changes
+        const originalNote = notes.find(n => n.id === noteData.id);
+        const originalCharIds = originalNote.characters?.map(c => c.id) || [];
+        const newCharIds = noteData.characterIds || [];
+
+        const toAdd = newCharIds.filter(id => !originalCharIds.includes(id));
+        const toRemove = originalCharIds.filter(id => !newCharIds.includes(id));
+
+        const addPromises = toAdd.map(charId => axios.post(`${API_URL}/${noteData.id}/characters`, { characterId: charId }));
+        const removePromises = toRemove.map(charId => axios.delete(`${API_URL}/${noteData.id}/characters/${charId}`));
+
+        await Promise.all([...addPromises, ...removePromises]);
+
+        handleDataChange(); // Refresh all data to get updated relationships
+
         const updated = notes.map(n => n.id === noteData.id ? response.data : n)
                              .sort((a, b) => Number(b.id) - Number(a.id));
         setNotes(updated);
         return response.data;
       } else {
         // --- CREATE ---
-        const response = await axios.post(API_URL, noteData);
+        const formData = new FormData();
+        for (const key in noteData) {
+          if (key === 'characterIds' || noteData[key] === null || noteData[key] === undefined) continue;
+          formData.append(key, noteData[key]);
+        }
+
+        const response = await axios.post(API_URL, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
         setNotes([...notes, response.data].sort((a, b) => Number(b.id) - Number(a.id)));
         return response.data;
       }
@@ -70,10 +108,15 @@ function App() {
         // --- UPDATE ---
         const formData = new FormData();
         for (const key in charData) {
-          if (key === 'sessionIds' || key === 'sessions' || key === 'imageUrl') continue;
-          // Don't append a null image file
-          if (key === 'image' && !charData[key]) continue;
-          formData.append(key, charData[key]);
+          // Skip complex objects that FormData can't handle
+          if (key === 'sessions' || key === 'sessionIds') {
+            continue;
+          }
+          // Append all other fields, including the image file if it exists.
+          // A null or undefined value for 'image' will be handled correctly.
+          if (charData[key] !== undefined) {
+            formData.append(key, charData[key]);
+          }
         }
 
         const response = await axios.put(`${CHAR_API_URL}/${charData.id}`, formData, {
@@ -91,8 +134,8 @@ function App() {
         // --- CREATE ---
         const formData = new FormData();
         for (const key in charData) {
-          if (key === 'sessionIds') {
-            // FormData doesn't handle arrays well directly, so we skip it here
+          // Skip complex objects and undefined/null values that FormData can't handle
+          if (key === 'sessionIds' || charData[key] === null || charData[key] === undefined) {
             continue;
           }
           formData.append(key, charData[key]);
@@ -145,7 +188,20 @@ function App() {
     fetchCharacters();
   };
 
-  const recentNotes = notes.slice(0, 3);
+  const numberedNotes = React.useMemo(() => {
+    if (!notes || notes.length === 0) return [];
+
+    // Create a sorted copy to determine chronological order
+    const sortedByDate = [...notes].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Create a map of id to session number for efficient lookup
+    const sessionNumberMap = new Map(sortedByDate.map((note, index) => [note.id, index + 1]));
+
+    // Return the original notes array with the session number added
+    return notes.map(note => ({ ...note, sessionNumber: sessionNumberMap.get(note.id) }));
+  }, [notes]);
+
+  const recentNotes = numberedNotes.slice(0, 3);
 
   // Main App component now handles routing
   return (
@@ -155,10 +211,8 @@ function App() {
           <h1><Link to="/" className="header-link">Tyranny of Dragons</Link></h1>
         </div>
         <nav className="main-nav">
-          <Link to="/sessions">Sessions</Link>
-          <Link to="/characters">Characters</Link>
-          <Link to="/calendar">Calendar</Link>
-          <Link to="/map">Map</Link>
+          <NavLink to="/sessions">Sessions</NavLink>
+          <NavLink to="/characters">Characters</NavLink>
         </nav>
       </aside>
 
@@ -174,24 +228,24 @@ function App() {
           <Route path="/sessions" element={
             <div className="container">
               <AllSessionsPage
-                notes={notes}
+                notes={numberedNotes}
               />
             </div>
           } />
           <Route
             path="/characters"
-            element={<div className="container"><CharactersPage characters={characters} /></div>} />
+            element={<div className="container"><CharactersPage characters={characters} notes={numberedNotes} /></div>} />
           <Route
             path="/characters/new"
             element={
-              <div className="container"><AddCharacterPage onSaveCharacter={handleSaveCharacter} notes={notes} characters={characters} /></div>
+              <div className="container"><AddCharacterPage onSaveCharacter={handleSaveCharacter} notes={numberedNotes} characters={characters} /></div>
             } />
           <Route
             path="/characters/:charId"
             element={
               <div className="container">
                 <CharacterDetailPage
-                  notes={notes}
+                  notes={numberedNotes}
                   onSaveCharacter={handleSaveCharacter}
                   onDeleteCharacter={handleDeleteCharacter}
                   onDataChange={handleDataChange}
@@ -201,30 +255,20 @@ function App() {
           <Route
             path="/sessions/new"
             element={
-              <div className="container"><AddNotePage onSaveNote={handleSaveNote} /></div>
+              <div className="container"><AddNotePage onSaveNote={handleSaveNote} characters={characters} /></div>
             } />
           <Route
             path="/notes/:noteId"
             element={
               <div className="container">
                 <NoteDetailPage
-                  notes={notes}
+                  notes={numberedNotes}
                   characters={characters}
                   onSaveNote={handleSaveNote}
                   onDeleteNote={handleDeleteNote}
                   onDataChange={handleDataChange}
                 />
               </div>
-            } />
-          <Route
-            path="/calendar"
-            element={
-              <CalendarPage notes={notes} />
-            } />
-          <Route
-            path="/map"
-            element={
-              <MapPage />
             } />
         </Routes>
       </div>
@@ -234,129 +278,209 @@ function App() {
 
 // --- Page Components ---
 
-function CharactersPage({ characters }) {
+function CharactersPage({ characters, notes }) {
   const navigate = useNavigate();
-  const [columnFilters, setColumnFilters] = useState({});
-  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'ascending' });
+  const [activeFilters, setActiveFilters] = useState([]);
+  const [filtersVisible, setFiltersVisible] = useState(false);
 
-  const handleSort = (event, key) => {
-    // Don't sort if the click was on the filter button
-    if (event.target.closest('.filter-icon')) return;
+  const filterOptions = [
+    { key: 'race', label: 'Race', type: 'select' },
+    { key: 'class', label: 'Class', type: 'select' },
+    { key: 'playerType', label: 'Type', type: 'select' },
+    { key: 'status', label: 'Status', type: 'select' },
+    { key: 'location', label: 'Location', type: 'select' },
+    { key: 'sessions', label: 'Related Sessions', type: 'select' }
+  ];
 
-    let direction = 'ascending';
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
+  const addFilter = (filterKey) => {
+    if (!activeFilters.find(f => f.key === filterKey)) {
+      setActiveFilters(prev => [...prev, { key: filterKey, values: [] }]);
     }
-    setSortConfig({ key, direction });
   };
 
-  const handleFilterChange = (key, value) => {
-    setColumnFilters(prev => ({ ...prev, [key]: value }));
+  const updateFilter = (filterKey, values) => {
+    setActiveFilters(prev => 
+      prev.map(f => f.key === filterKey ? { ...f, values } : f)
+    );
   };
 
-  const activeFilters = Object.entries(columnFilters).filter(([, value]) => value);
-
-  const getSortIndicator = (key) => {
-    if (sortConfig.key !== key) return null;
-    return sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
+  const removeFilter = (filterKey) => {
+    setActiveFilters(prev => prev.filter(f => f.key !== filterKey));
   };
 
-  const sortedAndFilteredCharacters = React.useMemo(() => {
+  const clearAllFilters = () => {
+    setActiveFilters([]);
+  };
+
+  const getUniqueValues = (key) => {
+    if (key === 'sessions') {
+      return [...new Set(notes.map(n => n.title))].filter(Boolean).sort();
+    }
+    return [...new Set(characters.map(c => c[key]))].filter(Boolean).sort();
+  };
+
+  const filteredCharacters = React.useMemo(() => {
     let filtered = [...characters];
 
-    Object.entries(columnFilters).forEach(([key, value]) => {
-      if (value) {
-        filtered = filtered.filter(char => String(char[key]) === String(value));
+    // Apply filters
+    activeFilters.forEach(filter => {
+      if (filter.values && filter.values.length > 0) {
+        if (filter.key === 'sessions') {
+          // Filter by related sessions - check if character has any of the selected sessions
+          filtered = filtered.filter(char => {
+            if (!char.sessions || char.sessions.length === 0) return false;
+            return char.sessions.some(session => filter.values.includes(session.title));
+          });
+        } else {
+          // Filter by character properties
+          filtered = filtered.filter(char => {
+            const charValue = String(char[filter.key] || '');
+            return filter.values.includes(charValue);
+          });
+        }
       }
-    });
-
-    filtered.sort((a, b) => {
-      const aValue = a[sortConfig.key] || '';
-      const bValue = b[sortConfig.key] || '';
-      if (aValue < bValue) {
-        return sortConfig.direction === 'ascending' ? -1 : 1;
-      }
-      if (aValue > bValue) {
-        return sortConfig.direction === 'ascending' ? 1 : -1;
-      }
-      return 0;
     });
 
     return filtered;
-  }, [characters, columnFilters, sortConfig]);
-
-  const getColumnOptions = (key) => {
-    return [...new Set(characters.map(c => c[key]))].filter(Boolean).sort();
-  };
+  }, [characters, activeFilters]);
 
   return (
     <section>
       <div className="page-header">
         <h2>Characters</h2>
-        <Link to="/characters/new" className="btn-primary">+ Create Character</Link>
+        <div className="header-actions-group">
+          <button className="btn btn-secondary" onClick={() => setFiltersVisible(!filtersVisible)}>
+            {filtersVisible ? 'Hide Filters' : 'Show Filters'}
+          </button>
+          <Link to="/characters/new" className="btn btn-primary">+ Create Character</Link>
+        </div>
       </div>
-      {activeFilters.length > 0 && (
-        <div className="active-filters-container">
-          <span className="active-filters-label">Active Filters:</span>
-          <div className="pills-wrapper">
-            {activeFilters.map(([key, value]) => (
-              <span key={key} className="filter-pill">
-                {key}: {value}
-                <button className="pill-close" onClick={() => handleFilterChange(key, '')}>&times;</button>
-              </span>
-            ))}
+      
+      {/* Dynamic Filter Controls */}
+      {filtersVisible && (
+        <div className="card">
+          <div className="filters-header">
+            <h3>Filters</h3>
+            <div className="filter-actions">
+              <select 
+                value="" 
+                onChange={(e) => e.target.value && addFilter(e.target.value)}
+                className="filter-add-select"
+              >
+                <option value="">+ Add Filter</option>
+                {filterOptions
+                  .filter(option => !activeFilters.find(f => f.key === option.key))
+                  .map(option => (
+                    <option key={option.key} value={option.key}>{option.label}</option>
+                  ))
+                }
+              </select>
+              {activeFilters.length > 0 && (
+                <button className="btn btn-secondary" onClick={clearAllFilters}>Clear All</button>
+              )}
+            </div>
           </div>
-          <button className="btn-secondary" onClick={() => setColumnFilters({})}>Clear All</button>
+          
+          {activeFilters.length > 0 && (
+            <div className="active-filters">
+              {activeFilters.map(filter => {
+                const option = filterOptions.find(opt => opt.key === filter.key);
+                const availableValues = getUniqueValues(filter.key);
+                
+                return (
+                  <div key={filter.key} className="filter-item">
+                    <label>{option?.label}</label>
+                    <div className="filter-controls">
+                      <div className="multi-select-container">
+                        <div className="selected-values">
+                          {filter.values.length === 0 ? (
+                            <span className="placeholder">Select {option?.label.toLowerCase()}</span>
+                          ) : (
+                            filter.values.map(value => (
+                              <span key={value} className="selected-value">
+                                {value}
+                                <button 
+                                  className="remove-value"
+                                  onClick={() => {
+                                    const newValues = filter.values.filter(v => v !== value);
+                                    updateFilter(filter.key, newValues);
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))
+                          )}
+                        </div>
+                        <div className="multi-select-options">
+                          {availableValues
+                            .filter(value => !filter.values.includes(value))
+                            .map(value => (
+                              <button
+                                key={value}
+                                className="option-button"
+                                onClick={() => {
+                                  const newValues = [...filter.values, value];
+                                  updateFilter(filter.key, newValues);
+                                }}
+                              >
+                                + {value}
+                              </button>
+                            ))
+                          }
+                        </div>
+                      </div>
+                      <button 
+                        className="filter-remove" 
+                        onClick={() => removeFilter(filter.key)}
+                        title="Remove filter"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
-      <table className="characters-table">
-        <thead>
-          <tr>
-            <th onClick={(e) => handleSort(e, 'name')}>
-              <div className="th-content">
-                <span>Name{getSortIndicator('name')}</span>
-                <ColumnFilter columnKey="name" options={getColumnOptions('name')} onChange={handleFilterChange} value={columnFilters.name} />
-              </div>
-            </th>
-            <th onClick={(e) => handleSort(e, 'race')}>
-              <div className="th-content">
-                <span>Race{getSortIndicator('race')}</span>
-                <ColumnFilter columnKey="race" options={getColumnOptions('race')} onChange={handleFilterChange} value={columnFilters.race} />
-              </div>
-            </th>
-            <th onClick={(e) => handleSort(e, 'class')}>
-              <div className="th-content">
-                <span>Class{getSortIndicator('class')}</span>
-                <ColumnFilter columnKey="class" options={getColumnOptions('class')} onChange={handleFilterChange} value={columnFilters.class} />
-              </div>
-            </th>
-            <th onClick={(e) => handleSort(e, 'playerType')}>
-              <div className="th-content">
-                <span>Type{getSortIndicator('playerType')}</span>
-                <ColumnFilter columnKey="playerType" options={getColumnOptions('playerType')} onChange={handleFilterChange} value={columnFilters.playerType} />
-              </div>
-            </th>
-            <th onClick={(e) => handleSort(e, 'status')}>Status{getSortIndicator('status')}</th>
-            <th onClick={(e) => handleSort(e, 'location')}>Last Known Location{getSortIndicator('location')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sortedAndFilteredCharacters.length > 0 ? (
-            sortedAndFilteredCharacters.map(char => (
-              <tr key={char.id} onClick={() => navigate(`/characters/${char.id}`)}>
-                <td>{char.name}</td>
-                <td>{char.race}</td>
-                <td>{char.class}</td>
-                <td>{char.playerType}</td>
-                <td>{char.status}</td>
-                <td>{char.location}</td>
+
+      {/* Characters Table */}
+      <div className="card table-container">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Race</th>
+              <th>Class</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Location</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredCharacters.length > 0 ? (
+              filteredCharacters.map(char => (
+                <tr key={char.id} onClick={() => navigate(`/characters/${char.id}`)} className="clickable-row">
+                  <td><strong>{char.name}</strong></td>
+                  <td>{char.race}</td>
+                  <td>{char.class}</td>
+                  <td>{char.playerType}</td>
+                  <td>{char.status}</td>
+                  <td>{char.location}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="6" className="no-results">
+                  {activeFilters.length > 0 ? 'No characters match the current filters.' : 'No characters found.'}
+                </td>
               </tr>
-            ))
-          ) : (
-            <tr><td colSpan="6">No characters match the current filters.</td></tr>
-          )}
-        </tbody>
-      </table>
+            )}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
@@ -367,17 +491,28 @@ function HomePage({ recentNotes }) {
       <section>
         <div className="page-header">
           <h2>Recent Dispatches</h2>
-          <Link to="/sessions/new" className="btn-primary">+ Add Session</Link>
+          <Link to="/sessions/new" className="btn btn-primary">+ Add Session</Link>
         </div>
         {recentNotes.length ? (
           recentNotes.map(note => (
             <Link to={`/notes/${note.id}`} key={note.id} className="note-link">
-              <div className="note-card-summary">
-                <div className="page-header">
-                  <h3>{note.title}</h3>
+              <div className="card">
+                <div className="card-header">
+                  <h3>Session {note.sessionNumber}: {note.title}</h3>
                   {note.date && <span className="session-date">{new Date(note.date).toLocaleDateString()}</span>}
                 </div>
                 <p>{note.content.substring(0, 100)}...</p>
+                {note.characters && note.characters.length > 0 && (
+                  <div className="session-characters">
+                    <div className="related-items-list">
+                      {note.characters.map(char => (
+                        <span key={char.id} className="related-item-pill">
+                          <Link to={`/characters/${char.id}`} onClick={(e) => e.stopPropagation()}>{char.name}</Link>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </Link>
           ))
@@ -410,127 +545,36 @@ function AllSessionsPage({ notes }) {
       <div className="page-header">
         <h2>Full Campaign Log</h2>
         <div className="header-actions-group">
-          <button onClick={toggleSortOrder} className="btn-secondary">
+          <button onClick={toggleSortOrder} className="btn btn-secondary">
             Sort: {sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
           </button>
-          <Link to="/sessions/new" className="btn-primary">+ Add Session</Link>
+          <Link to="/sessions/new" className="btn btn-primary">+ Add Session</Link>
         </div>
       </div>
       <div className="note-list-full">
         {sortedNotes.map(note => (
-          <Link to={`/notes/${note.id}`} key={note.id} className="note-link"><div className="note-card-full">
+          <Link to={`/notes/${note.id}`} key={note.id} className="note-link"><div className="card">
             <div className="page-header">
-              <h3>{note.title}</h3>
+              <h3>Session {note.sessionNumber}: {note.title}</h3>
               {note.date && <span className="session-date">{new Date(note.date).toLocaleDateString()}</span>}
             </div>
             <div className="markdown-content">
               <ReactMarkdown rehypePlugins={[rehypeRaw]}>{`${note.content.substring(0, 200)}...`}</ReactMarkdown>
             </div>
+            {note.characters && note.characters.length > 0 && (
+              <div className="session-characters">
+                <div className="related-items-list">
+                  {note.characters.map(char => (
+                    <span key={char.id} className="related-item-pill">
+                      <Link to={`/characters/${char.id}`} onClick={(e) => e.stopPropagation()}>{char.name}</Link>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div></Link>
         ))}
       </div>
-    </section>
-  );
-}
-
-function MapPage() {
-  return (
-    <section>
-      <div className="page-header">
-        <h2>World Map</h2>
-      </div>
-      <div className="map-placeholder-container">
-        <div className="map-placeholder">
-          <p>The world map will be displayed here.</p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function CalendarPage({ notes }) {
-  const navigate = useNavigate();
-  const [activeDate, setActiveDate] = useState(null);
-  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
-  const [sessionsForPopup, setSessionsForPopup] = useState([]);
-
-  // Create a lookup map for session dates for efficient access
-  const sessionDateMap = React.useMemo(() => {
-    const map = new Map();
-    notes.forEach(note => {
-      if (note.date) {
-        // Normalize date to ignore time zones and time parts
-        const dateKey = new Date(note.date).toDateString();
-        if (!map.has(dateKey)) {
-          map.set(dateKey, []);
-        }
-        map.get(dateKey).push(note);
-      }
-    });
-    return map;
-  }, [notes]);
-
-  const handleMouseEnter = (event, date) => {
-    const dateKey = date.toDateString();
-    if (sessionDateMap.has(dateKey)) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      setPopupPosition({ top: rect.bottom + window.scrollY + 5, left: rect.left + window.scrollX });
-      setSessionsForPopup(sessionDateMap.get(dateKey));
-      setActiveDate(date);
-    }
-  };
-
-  const handleMouseLeave = () => {
-    setActiveDate(null);
-    setSessionsForPopup([]);
-  };
-
-  const tileContent = ({ date, view }) => {
-    if (view === 'month') {
-      const dateKey = date.toDateString();
-      if (sessionDateMap.has(dateKey)) {
-        return (
-          <div className="session-marker-wrapper" onMouseEnter={(e) => handleMouseEnter(e, date)} onMouseLeave={handleMouseLeave}>
-            <div className="session-marker"></div>
-          </div>
-        );
-      }
-    }
-    return null;
-  };
-
-  const handleDayClick = (value) => {
-    const dateKey = value.toDateString();
-    if (sessionDateMap.has(dateKey)) {
-      const sessionsOnDay = sessionDateMap.get(dateKey);
-      // Navigate to the first session on that day
-      navigate(`/notes/${sessionsOnDay[0].id}`);
-    }
-  };
-
-  return (
-    <section>
-      <div className="page-header">
-        <h2>Campaign Calendar</h2>
-      </div>
-      <div className="calendar-container">
-        <Calendar
-          tileContent={tileContent}
-          onClickDay={handleDayClick}
-        />
-      </div>
-      {activeDate && sessionsForPopup.length > 0 && (
-        <div className="calendar-popup" style={{ top: `${popupPosition.top}px`, left: `${popupPosition.left}px` }}>
-          <div className="calendar-popup-header">
-            {activeDate.toLocaleDateString()}
-          </div>
-          <ul>
-            {sessionsForPopup.map(session => (
-              <li key={session.id}>{session.title}</li>
-            ))}
-          </ul>
-        </div>
-      )}
     </section>
   );
 }
@@ -572,6 +616,9 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
     try {
       await axios.post(`${API_URL}/${sessionId}/characters`, { characterId: character.id });
       onDataChange(); // Tell the App to refetch all data
+      // Also refresh the character data directly
+      const res = await axios.get(`${CHAR_API_URL}/${charId}`);
+      setCharacter(res.data);
     } catch (err) {
       console.error("Error adding session to character:", err);
       alert(err.response?.data?.message || "Could not add session.");
@@ -582,6 +629,9 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
     try {
       await axios.delete(`${API_URL}/${sessionId}/characters/${character.id}`);
       onDataChange(); // Tell the App to refetch all data
+      // Also refresh the character data directly
+      const res = await axios.get(`${CHAR_API_URL}/${charId}`);
+      setCharacter(res.data);
     } catch (err) {
       console.error("Error removing session from character:", err);
     }
@@ -601,24 +651,26 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
   }
 
   return (
-    <div className="character-detail-page">
+    <div>
       {isEditing ? (
         <CharacterForm
           character={character}
           onSave={handleSaveWrapper}
           onCancel={() => setIsEditing(false)}
           notes={notes}
+          characters={[]} // Pass empty array as it's not needed for edit form
         />
       ) : (
         <div className="character-detail-layout">
           <div className="character-detail-main">
             <div className="page-header">
-              <h2>{character.name}</h2>
-              <div className="note-actions">
-                <button className="btn-primary" onClick={() => setIsEditing(true)}>Edit</button>
-                <button className="btn-danger" onClick={handleDelete}>Delete</button>
+              <h2><span className="character-name-label">Character Name:</span> {character.name}</h2>
+              <div className="header-actions-group">
+                <button className="btn btn-secondary" onClick={() => setIsEditing(true)}>Edit</button>
+                <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
               </div>
             </div>
+
             <div className="character-stats">
               <span><strong>Race:</strong> {character.race}</span>
               <span><strong>Class:</strong> {character.class}</span>
@@ -626,37 +678,43 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
               <span><strong>Status:</strong> {character.status}</span>
               <span><strong>Location:</strong> {character.location}</span>
             </div>
-            <h3>Backstory & Notes</h3>
-            <div className="markdown-content">
-              <ReactMarkdown rehypePlugins={[rehypeRaw]}>{character.backstory}</ReactMarkdown>
-            </div>
-            <hr />
-            <div className="page-header">
-              <h3>Related Sessions</h3>
-              {availableSessions.length > 0 && (
-                <div className="add-character-to-session">
-                  <select
-                    onChange={(e) => addSessionToCharacter(e.target.value)}
-                    value=""
-                    className="btn-secondary"
-                  >
-                    <option value="" disabled>+ Add to Session</option>
-                    {availableSessions.map(note => <option key={note.id} value={note.id}>{note.title}</option>)}
-                  </select>
-                </div>
-              )}
-            </div>
-            {character.sessions && character.sessions.length > 0 ? (
-              <div className="related-items-list">
-                {character.sessions.map(session => (
-                  <span key={session.id} className="related-item-pill editable">
-                    <Link to={`/notes/${session.id}`}>{session.title}</Link>
-                    <button className="pill-close" onClick={() => removeSessionFromCharacter(session.id)}>&times;</button>
-                  </span>
-                ))}
+
+            <div className="card">
+              <h3>Backstory & Notes</h3>
+              <div className="markdown-content">
+                <ReactMarkdown rehypePlugins={[rehypeRaw]}>{character.backstory}</ReactMarkdown>
               </div>
-            ) : <p>This character has not appeared in any sessions yet.</p>}
+            </div>
+
+            <div className="card">
+              <div className="page-header">
+                <h3>Related Sessions</h3>
+                {availableSessions.length > 0 && (
+                  <div className="add-character-to-session">
+                    <select
+                      onChange={(e) => addSessionToCharacter(e.target.value)}
+                      value=""
+                      className="btn btn-primary"
+                    >
+                      <option value="" disabled>+ Add to Session</option>
+                      {availableSessions.map(note => <option key={note.id} value={note.id}>{note.title}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+              {character.sessions && character.sessions.length > 0 ? (
+                <div className="related-items-list">
+                  {character.sessions.map(session => (
+                    <span key={session.id} className="related-item-pill editable">
+                      <Link to={`/notes/${session.id}`}>{session.title}</Link>
+                      <button className="pill-close" onClick={() => removeSessionFromCharacter(session.id)}>&times;</button>
+                    </span>
+                  ))}
+                </div>
+              ) : <p>This character has not appeared in any sessions yet.</p>}
+            </div>
           </div>
+          
           <div className="character-detail-sidebar">
             {character.imageUrl && (
               <div className="character-portrait-container">
@@ -676,7 +734,7 @@ function AddCharacterPage({ onSaveCharacter, notes, characters }) {
   const handleSave = async (charData) => {
     const newChar = await onSaveCharacter(charData);
     if (newChar) {
-      navigate('/characters'); // Navigate to the characters list
+      navigate(`/characters/${newChar.id}`); // Navigate to the new character's detail page
     }
   };
 
@@ -685,7 +743,7 @@ function AddCharacterPage({ onSaveCharacter, notes, characters }) {
   );
 }
 
-function AddNotePage({ onSaveNote }) {
+function AddNotePage({ onSaveNote, characters }) {
   const navigate = useNavigate();
 
   const handleSave = async (noteData) => {
@@ -696,7 +754,7 @@ function AddNotePage({ onSaveNote }) {
   };
 
   return (
-    <NoteForm note={{}} onSave={handleSave} onCancel={() => navigate('/sessions')} />
+    <NoteForm note={{}} onSave={handleSave} onCancel={() => navigate('/sessions')} characters={characters} />
   );
 }
 
@@ -710,14 +768,21 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
     const fetchNote = async () => {
       try {
         const res = await axios.get(`${API_URL}/${noteId}`);
-        setNote(res.data);
+        const fetchedNote = res.data;
+        
+        // Calculate session number based on chronological order (ascending by date)
+        const sortedByDate = [...notes].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const noteIndex = sortedByDate.findIndex(n => n.id == noteId); // Use == for type coercion
+        const sessionNumber = noteIndex >= 0 ? noteIndex + 1 : 1;
+        
+        setNote({ ...fetchedNote, sessionNumber });
       } catch (err) {
         console.error("Error fetching note details:", err);
         setNote(null);
       }
     };
     fetchNote();
-  }, [noteId, isEditing]);
+  }, [noteId, isEditing, notes]);
 
   const handleDelete = async () => {
     if (note) {
@@ -777,31 +842,35 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
           note={note}
           onSave={handleSaveWrapper}
           onCancel={() => setIsEditing(false)}
+          characters={characters}
         />
       ) : (
-        <div className="note-card-full">
+        <div className="card">
+          {note.imageUrl && (
+            <img src={`http://localhost:5001${note.imageUrl}`} alt={note.title} className="session-banner-image" />
+          )}
           <div className="page-header">
             <div>
-              <h2>{note.title}</h2>
+              <h2>Session {note.sessionNumber}: {note.title}</h2>
               {note.date && <p className="session-date-header">{new Date(note.date).toLocaleDateString()}</p>}
             </div>
-            <div className="note-actions">
-              <button className="btn-primary" onClick={() => setIsEditing(true)}>Edit</button>
-              <button className="btn-danger" onClick={handleDelete}>Delete</button>
+            <div className="header-actions-group">
+              <button className="btn btn-secondary" onClick={() => setIsEditing(true)}>Edit</button>
+              <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
             </div>
           </div>
           <div className="markdown-content">
             <ReactMarkdown rehypePlugins={[rehypeRaw]}>{note.content}</ReactMarkdown>
           </div>
-          <hr />
-          <div className="page-header">
+          <hr style={{ margin: '2rem 0' }} />
+          <div className="card-header">
             <h3>Characters in this Session</h3>
             {availableCharacters.length > 0 && (
               <div className="add-character-to-session">
                 <select
                   onChange={(e) => addCharacterToSession(e.target.value)}
                   value=""
-                  className="btn-primary"
+                  className="btn btn-secondary"
                 >
                   <option value="" disabled>+ Add Character</option>
                   {availableCharacters.map(char => (
@@ -820,8 +889,7 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
                 </span>
               ))}
             </div>
-          ) : <p>No characters have been added to this session yet.</p>}
-
+          ) : <p className="no-items-text">No characters have been added to this session yet.</p>}
         </div>
       )}
     </div>
@@ -829,35 +897,63 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
 }
 
 // --- Reusable Form Component ---
-function NoteForm({ note, onSave, onCancel }) {
+function NoteForm({ note, onSave, onCancel, characters = [] }) {
   const [title, setTitle] = useState(note.title || '');
   const [date, setDate] = useState(note.date || new Date().toISOString().split('T')[0]);
   const [content, setContent] = useState(note.content || '');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(note.imageUrl ? `http://localhost:5001${note.imageUrl}` : null);
+  const [selectedCharacters, setSelectedCharacters] = useState(note.characters?.map(c => c.id) || []);
 
   useEffect(() => {
     setTitle(note.title || '');
     setDate(note.date || new Date().toISOString().split('T')[0]);
     setContent(note.content || '');
+    setImagePreview(note.imageUrl ? `http://localhost:5001${note.imageUrl}` : null);
+    setSelectedCharacters(note.characters?.map(c => c.id) || []);
   }, [note]);
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleCharacterToggle = (charId) => {
+    setSelectedCharacters(prev =>
+      prev.includes(charId) ? prev.filter(id => id !== charId) : [...prev, charId]
+    );
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const saveData = async () => {
-      await onSave({ title, date, content });
-    };
-    saveData();
+    onSave({ ...note, title, date, content, characterIds: selectedCharacters, image: imageFile });
   };
 
   return (
-    <form onSubmit={handleSubmit} className="note-form">
-      {note.id && <h3>Edit Note</h3>}
+    <form onSubmit={handleSubmit} className="card">
+      {note.id && <h3>Edit Session</h3>}
+      <div className="form-section character-image-section">
+        {imagePreview && <img src={imagePreview} alt="Session preview" className="character-image-preview" />}
+        <div className="image-upload-wrapper">
+          <label htmlFor="session-image-upload">Session Banner</label>
+          <input
+            id="session-image-upload"
+            type="file"
+            accept="image/png, image/jpeg, image/webp"
+            onChange={handleImageChange}
+          />
+        </div>
+      </div>
       <div className="form-grid">
         <div className="form-field">
           <label htmlFor="note-title">Session Title</label>
           <input
             id="note-title"
             type="text"
-            value={title}
+            className="form-input" value={title}
             onChange={e => setTitle(e.target.value)}
             required
           />
@@ -867,7 +963,7 @@ function NoteForm({ note, onSave, onCancel }) {
           <input
             id="note-date"
             type="date"
-            value={date}
+            className="form-input" value={date}
             onChange={e => setDate(e.target.value)}
             required
           />
@@ -877,14 +973,46 @@ function NoteForm({ note, onSave, onCancel }) {
         <label htmlFor="note-content">Session Details</label>
         <textarea
           id="note-content"
-          value={content}
+          className="form-textarea" value={content}
           onChange={e => setContent(e.target.value)}
           required
         />
       </div>
+      <div className="form-section form-section-flush-header">
+        <div className="page-header">
+          <h4>Characters in this Session</h4>
+          <div className="add-character-to-session">
+            <select
+              onChange={(e) => handleCharacterToggle(Number(e.target.value))}
+              value=""
+              className="btn btn-secondary"
+            >
+              <option value="" disabled>+ Add Character</option>
+              {characters
+                .filter(char => !selectedCharacters.includes(char.id))
+                .map(char => <option key={char.id} value={char.id}>{char.name}</option>)
+              }
+            </select>
+          </div>
+        </div>
+        <div className="related-items-list">
+          {selectedCharacters.length > 0 ? (
+            characters
+              .filter(char => selectedCharacters.includes(char.id))
+              .map(char => (
+                <span key={char.id} className="related-item-pill editable">
+                  <span>{char.name}</span>
+                  <button type="button" className="pill-close" onClick={() => handleCharacterToggle(char.id)}>&times;</button>
+                </span>
+              ))
+          ) : (
+            <p className="no-items-text">No characters linked yet.</p>
+          )}
+        </div>
+      </div>
       <div className="form-actions">
-        <button type="submit" className="btn-primary">Save Note</button>
-        <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="btn btn-primary">Save Note</button>
+        <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
       </div>
     </form>
   );
@@ -922,11 +1050,26 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave({ name, status, location, race, class: charClass, playerType, backstory, sessionIds: selectedSessions, image: imageFile });
+    const saveData = {
+      name,
+      status,
+      location,
+      race,
+      class: charClass,
+      playerType,
+      backstory,
+      sessionIds: selectedSessions,
+      image: imageFile,
+      imageUrl: character.imageUrl // Preserve the existing imageUrl
+    };
+    if (character.id) {
+      saveData.id = character.id;
+    }
+    onSave(saveData);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="note-form">
+    <form onSubmit={handleSubmit} className="card">
       {character.id && <h3>Edit Character</h3>}
       <div className="form-section character-image-section">
         {imagePreview && <img src={imagePreview} alt="Character preview" className="character-image-preview" />}
@@ -945,7 +1088,7 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
           <label htmlFor="char-name">Character Name</label>
           <input
             id="char-name"
-            type="text"
+            type="text" className="form-input"
             value={name}
             onChange={e => setName(e.target.value)}
             required
@@ -953,7 +1096,7 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
         </div>
         <div className="form-field">
           <label htmlFor="char-status">Status</label>
-          <select id="char-status" value={status} onChange={e => setStatus(e.target.value)} required>
+          <select id="char-status" className="form-select" value={status} onChange={e => setStatus(e.target.value)} required>
             <option value="Alive">Alive</option>
             <option value="Dead">Dead</option>
             <option value="Missing">Missing</option>
@@ -963,28 +1106,28 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
           <label htmlFor="char-location">Last Known Location</label>
           <input
             id="char-location"
-            type="text"
+            type="text" className="form-input"
             value={location}
             onChange={e => setLocation(e.target.value)}
           />
         </div>
         <div className="form-field">
           <label htmlFor="char-race">Race</label>
-          <select id="char-race" value={race} onChange={e => setRace(e.target.value)} required>
+          <select id="char-race" className="form-select" value={race} onChange={e => setRace(e.target.value)} required>
             <option value="" disabled>Select a Race</option>
             {races.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
         <div className="form-field">
           <label htmlFor="char-class">Class</label>
-          <select id="char-class" value={charClass} onChange={e => setCharClass(e.target.value)} required>
+          <select id="char-class" className="form-select" value={charClass} onChange={e => setCharClass(e.target.value)} required>
             <option value="" disabled>Select a Class</option>
             {classes.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div className="form-field">
           <label htmlFor="char-type">Player Type</label>
-          <select id="char-type" value={playerType} onChange={e => setPlayerType(e.target.value)} required>
+          <select id="char-type" className="form-select" value={playerType} onChange={e => setPlayerType(e.target.value)} required>
             <option value="Player">Player</option>
             <option value="Non-Player">Non-Player</option>
           </select>
@@ -993,7 +1136,7 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
       <div className="form-field">
         <label htmlFor="char-backstory">Backstory & Notes</label>
         <textarea
-          id="char-backstory"
+          id="char-backstory" className="form-textarea"
           value={backstory}
           onChange={e => setBackstory(e.target.value)}
         />
@@ -1005,7 +1148,7 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
             <select
               onChange={(e) => handleSessionToggle(Number(e.target.value))}
               value=""
-              className="btn-secondary"
+              className="btn btn-secondary"
             >
               <option value="" disabled>+ Add to Session</option>
               {notes
@@ -1032,77 +1175,12 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
         </div>
       </div>
       <div className="form-actions">
-        <button type="submit" className="btn-primary">Save Character</button>
-        <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="btn btn-primary">Save Character</button>
+        <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
       </div>
     </form>
   );
 }
 
-// --- Reusable Column Filter Component ---
-function ColumnFilter({ columnKey, options, onChange, value }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const filterRef = React.useRef(null);
-
-  const filteredOptions = options.filter(opt =>
-    opt.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleSelect = (option) => {
-    onChange(columnKey, option);
-    setIsOpen(false);
-    setSearchTerm('');
-  };
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (filterRef.current && !filterRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  return (
-    <div className="filter-wrapper" ref={filterRef}>
-      <span
-        className={`filter-icon ${value ? 'active' : ''}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          setIsOpen(!isOpen);
-        }}
-      >
-        &#9662; {/* Down arrow */}
-      </span>
-      {isOpen && (
-        <div className="filter-dropdown">
-          <input
-            type="text"
-            className="filter-search"
-            placeholder="Search..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onClick={e => e.stopPropagation()}
-          />
-          <ul className="filter-list">
-            <li onClick={() => handleSelect('')}>-- All --</li>
-            {filteredOptions.map(opt => (
-              <li
-                key={opt}
-                onClick={() => handleSelect(opt)}
-                className={opt === value ? 'selected' : ''}
-              >
-                {opt}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default App;
