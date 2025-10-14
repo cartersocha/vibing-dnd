@@ -64,6 +64,14 @@ body {
   padding: 0 1rem;
 }
 
+/* Reusable page header for sections */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
 h2, h3 {
   font-family: 'IM Fell English', serif;
   color: var(--accent-color);
@@ -101,6 +109,82 @@ hr {
   text-decoration: none;
 }
 
+/* Re-use note card styles for character details */
+.character-detail-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  border-radius: 3px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.character-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background-color: #fdfbf5;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+}
+
+/* Character Table */
+.characters-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.characters-table th, .characters-table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+.active-filters-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background-color: #f8f3e8;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.active-filters-label {
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.pills-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: var(--accent-color);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.pill-close {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 1.2em;
+  line-height: 1;
+  padding: 0;
+  margin-left: 4px;
+}
 /* Form */
 .note-form {
   background-color: #fffaf0;
@@ -109,8 +193,71 @@ hr {
   margin: 2rem 0;
   border-radius: 5px;
 }
+.th-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 
-.note-form input, .note-form textarea {
+.filter-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.filter-icon {
+  font-size: 0.7em;
+  margin-left: 8px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 3px;
+  opacity: 0.5;
+}
+
+.filter-icon:hover {
+  background-color: #e8e1d1;
+  opacity: 1;
+}
+
+.filter-icon.active {
+  color: var(--accent-color);
+  opacity: 1;
+}
+
+.filter-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: white;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  z-index: 10;
+  min-width: 200px;
+  border-radius: 3px;
+}
+
+.filter-search {
+  width: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.characters-table th {
+  background-color: #f8f3e8;
+  font-family: 'IM Fell English', serif;
+  color: var(--accent-color);
+  font-size: 1.1rem;
+  cursor: pointer;
+  user-select: none; /* Prevents text selection on click */
+  position: relative;
+}
+.characters-table tbody tr:hover {
+  background-color: #fdfbf5;
+  cursor: pointer;
+}
+
+.note-form input, .note-form textarea, .note-form select {
   width: 100%;
   padding: 10px;
   margin-bottom: 1rem;
@@ -121,9 +268,47 @@ hr {
   box-sizing: border-box;
 }
 
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
 .note-form textarea {
   min-height: 150px;
   resize: vertical;
+}
+
+.form-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+/* A variation for sections where the header is flush with the content */
+.form-section-flush-header .page-header {
+  margin-bottom: 0.75rem;
+}
+
+.no-items-text {
+  font-style: italic;
+  color: #666;
+}
+.form-section h4 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.checkbox-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .form-actions {
@@ -146,4 +331,70 @@ hr {
 
 .btn-primary.btn-primary { /* Specificity to override link styles */
   text-decoration: none;
+}
+
+.filter-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.filter-list li {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.filter-list li:hover {
+  background-color: #f8f3e8;
+}
+.filter-list li.selected { font-weight: bold; }
+
+.related-items-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.related-item-pill {
+  background-color: #e8e1d1;
+  color: var(--text-color);
+  padding: 6px 12px;
+  border-radius: 15px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.related-item-pill.editable a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.related-item-pill.editable span {
+  text-decoration: none;
+}
+
+.related-item-pill:hover {
+  background-color: var(--border-color);
+}
+
+.add-character-to-session select {
+  font-family: 'Merriweather', serif;
+  font-size: 1rem;
+  /* Make select look like a button */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  padding: 10px 15px;
+}
+
+.header-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }

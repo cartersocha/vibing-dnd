@@ -15,7 +15,16 @@ let notes = [
   { id: 3, title: 'Session 3: The Whispering Cave', content: 'The map led to a dark cave, from which strange whispers could be heard on the wind.' },
   { id: 4, title: 'Session 4: The Cultist\'s Ritual', content: 'Deep inside the cave, the party stumbled upon a group of cultists performing a dark ritual.' },
 ];
-let nextId = 5;
+let characters = [
+  { id: 1, name: 'Aelar', race: 'Elf', class: 'Ranger', status: 'Active', location: 'Neverwinter', backstory: 'A mysterious ranger from the north.' }
+];
+let nextNoteId = 5;
+let nextCharId = 2;
+// Link table for Many-to-Many relationship
+let sessionCharacters = [
+  { sessionId: 1, characterId: 1 },
+  { sessionId: 2, characterId: 1 },
+];
 
 // --- API Endpoints ---
 
@@ -37,7 +46,7 @@ app.post('/api/notes', (req, res) => {
   const sanitizedTitle = sanitizeHtml(title, { allowedTags: [], allowedAttributes: {} });
   const sanitizedContent = sanitizeHtml(content, { allowedTags: [], allowedAttributes: {} });
 
-  const newNote = { id: nextId++, title: sanitizedTitle, content: sanitizedContent };
+  const newNote = { id: nextNoteId++, title: sanitizedTitle, content: sanitizedContent };
   notes.push(newNote);
   res.status(201).json(newNote); // Respond with the sanitized note
 });
@@ -68,10 +77,118 @@ app.put('/api/notes/:id', (req, res) => {
   res.json(notes[noteIndex]);
 });
 
+// GET a single note with related characters
+app.get('/api/notes/:id', (req, res) => {
+  const noteId = parseInt(req.params.id);
+  const note = notes.find(n => n.id === noteId);
+  if (!note) return res.status(404).json({ message: 'Note not found' });
+
+  const relatedCharacterIds = sessionCharacters
+    .filter(sc => sc.sessionId === noteId)
+    .map(sc => sc.characterId);
+  
+  const relatedCharacters = characters.filter(c => relatedCharacterIds.includes(c.id));
+
+  res.json({ ...note, characters: relatedCharacters });
+});
+
 // DELETE a note
 app.delete('/api/notes/:id', (req, res) => {
   const noteId = parseInt(req.params.id);
   notes = notes.filter(n => n.id !== noteId);
+  res.status(204).send();
+});
+
+// --- CHARACTERS API ---
+
+// GET all characters
+app.get('/api/characters', (req, res) => res.json(characters));
+
+// POST a new character
+app.post('/api/characters', (req, res) => {
+  const { name, race, class: charClass } = req.body;
+  if (!name || !race || !charClass) {
+    return res.status(400).json({ message: 'Name, race, and class are required' });
+  }
+
+  const sanitizedBody = {};
+  for (const key in req.body) {
+    sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+  }
+
+  const newChar = { id: nextCharId++, ...sanitizedBody };
+  characters.push(newChar);
+  res.status(201).json(newChar);
+});
+
+// PUT (update) a character
+app.put('/api/characters/:id', (req, res) => {
+  const charId = parseInt(req.params.id);
+  const charIndex = characters.findIndex(c => c.id === charId);
+
+  if (charIndex === -1) return res.status(404).json({ message: 'Character not found' });
+
+  const sanitizedBody = {};
+  for (const key in req.body) {
+    if (req.body[key]) {
+      sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+    }
+  }
+
+  characters[charIndex] = { ...characters[charIndex], ...sanitizedBody };
+  res.json(characters[charIndex]);
+});
+
+// GET a single character with related sessions
+app.get('/api/characters/:id', (req, res) => {
+  const charId = parseInt(req.params.id);
+  const character = characters.find(c => c.id === charId);
+  if (!character) return res.status(404).json({ message: 'Character not found' });
+
+  const relatedSessionIds = sessionCharacters
+    .filter(sc => sc.characterId === charId)
+    .map(sc => sc.sessionId);
+
+  const relatedSessions = notes.filter(n => relatedSessionIds.includes(n.id));
+
+  res.json({ ...character, sessions: relatedSessions });
+});
+
+// DELETE a character
+app.delete('/api/characters/:id', (req, res) => {
+  const charId = parseInt(req.params.id);
+  const initialLength = characters.length;
+  characters = characters.filter(c => c.id !== charId);
+
+  if (characters.length === initialLength) {
+    return res.status(404).json({ message: 'Character not found' });
+  }
+  res.status(204).send();
+});
+
+// --- RELATIONSHIP API ---
+
+// Add a character to a session
+app.post('/api/notes/:noteId/characters', (req, res) => {
+  const sessionId = parseInt(req.params.noteId);
+  const { characterId } = req.body;
+
+  const existing = sessionCharacters.find(sc => sc.sessionId === sessionId && sc.characterId === characterId);
+  if (existing) return res.status(409).json({ message: 'Character already in this session' });
+
+  sessionCharacters.push({ sessionId, characterId });
+  res.status(201).json({ message: 'Character added to session' });
+});
+
+// Remove a character from a session
+app.delete('/api/notes/:noteId/characters/:characterId', (req, res) => {
+  const sessionId = parseInt(req.params.noteId);
+  const characterId = parseInt(req.params.characterId);
+
+  sessionCharacters = sessionCharacters.filter(
+    sc => !(sc.sessionId === sessionId && sc.characterId === characterId)
+  );
+
   res.status(204).send();
 });
 

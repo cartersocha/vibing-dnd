@@ -4,10 +4,12 @@ import axios from 'axios';
 import './App.css';
 
 const API_URL = 'http://localhost:5001/api/notes';
+const CHAR_API_URL = 'http://localhost:5001/api/characters';
 
 function App() {
   const [notes, setNotes] = useState([]);
-
+  const [characters, setCharacters] = useState([]);
+  
   // Fetch all notes from backend
   useEffect(() => {
     const fetchNotes = async () => {
@@ -20,6 +22,20 @@ function App() {
       }
     };
     fetchNotes();
+  }, []);
+
+  // Fetch all characters from backend
+  useEffect(() => {
+    const fetchCharacters = async () => {
+      try {
+        const res = await axios.get(CHAR_API_URL);
+        // Sort alphabetically by name
+        setCharacters(res.data.sort((a, b) => a.name.localeCompare(b.name)));
+      } catch (err) {
+        console.error('Error fetching characters:', err);
+      }
+    };
+    fetchCharacters();
   }, []);
 
   const handleSaveNote = async (noteData) => {
@@ -44,6 +60,49 @@ function App() {
     }
   };
 
+  const handleSaveCharacter = async (charData) => {
+    try {
+      if (charData.id) {
+        // --- UPDATE ---
+        const response = await axios.put(`${CHAR_API_URL}/${charData.id}`, charData);
+        const updated = characters.map(c => c.id === charData.id ? response.data : c)
+                                  .sort((a, b) => a.name.localeCompare(b.name));
+        setCharacters(updated);
+        return response.data;
+      } else {
+        // --- CREATE ---
+        // Separate sessionIds from the rest of the character data
+        const { sessionIds, ...coreCharData } = charData;
+        const response = await axios.post(CHAR_API_URL, coreCharData);
+        const newChar = response.data;
+
+        // If sessions were selected, create those relationships now
+        if (sessionIds && sessionIds.length > 0) {
+          const relationshipPromises = sessionIds.map(sessionId =>
+            axios.post(`${API_URL}/${sessionId}/characters`, { characterId: newChar.id })
+          );
+          await Promise.all(relationshipPromises);
+        }
+
+        setCharacters([...characters, response.data].sort((a, b) => a.name.localeCompare(b.name)));
+        return response.data;
+      }
+    } catch (err) {
+      console.error('Error saving character:', err);
+      return null;
+    }
+  };
+
+  const handleDeleteCharacter = async (charId) => {
+    if (!window.confirm('Are you sure you want to permanently delete this character?')) return;
+    try {
+      await axios.delete(`${CHAR_API_URL}/${charId}`);
+      setCharacters(characters.filter(c => c.id !== charId));
+    } catch (err) {
+      console.error('Error deleting character:', err);
+    }
+  };
+
   const handleDeleteNote = async (noteId) => {
     if (!window.confirm('Are you sure you want to delete this note?')) return;
     try {
@@ -64,6 +123,7 @@ function App() {
         <div className="header-nav-group">
           <nav className="main-nav">
             <Link to="/">Home</Link>
+            <Link to="/characters">Characters</Link>
             <Link to="/sessions">Sessions</Link>
           </nav>
           <Link to="/sessions/new" className="btn-primary">+ Add Session</Link>
@@ -87,6 +147,26 @@ function App() {
             }
           />
           <Route
+            path="/characters" element={<CharactersPage characters={characters} />}
+          />
+          <Route
+            path="/characters/new"
+            element={
+              <AddCharacterPage onSaveCharacter={handleSaveCharacter} notes={notes} />
+            }
+          />
+          <Route
+            path="/characters/:charId"
+            element={
+              <CharacterDetailPage
+                characters={characters}
+                notes={notes}
+                onSaveCharacter={handleSaveCharacter}
+                onDeleteCharacter={handleDeleteCharacter}
+              />
+            }
+          />
+          <Route
             path="/sessions/new"
             element={
               <AddNotePage onSaveNote={handleSaveNote} />
@@ -97,6 +177,7 @@ function App() {
             element={
               <NoteDetailPage
                 notes={notes}
+                characters={characters}
                 onSaveNote={handleSaveNote}
                 onDeleteNote={handleDeleteNote}
               />
@@ -109,6 +190,126 @@ function App() {
 }
 
 // --- Page Components ---
+
+function CharactersPage({ characters }) {
+  const navigate = useNavigate();
+  const [columnFilters, setColumnFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'ascending' });
+
+  const handleSort = (event, key) => {
+    // Don't sort if the click was on the filter button
+    if (event.target.closest('.filter-icon')) return;
+
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const handleFilterChange = (key, value) => {
+    setColumnFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const activeFilters = Object.entries(columnFilters).filter(([, value]) => value);
+
+  const getSortIndicator = (key) => {
+    if (sortConfig.key !== key) return null;
+    return sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
+  };
+
+  const sortedAndFilteredCharacters = React.useMemo(() => {
+    let filtered = [...characters];
+
+    Object.entries(columnFilters).forEach(([key, value]) => {
+      if (value) {
+        filtered = filtered.filter(char => String(char[key]) === String(value));
+      }
+    });
+
+    filtered.sort((a, b) => {
+      const aValue = a[sortConfig.key] || '';
+      const bValue = b[sortConfig.key] || '';
+      if (aValue < bValue) {
+        return sortConfig.direction === 'ascending' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === 'ascending' ? 1 : -1;
+      }
+      return 0;
+    });
+
+    return filtered;
+  }, [characters, columnFilters, sortConfig]);
+
+  const getColumnOptions = (key) => {
+    return [...new Set(characters.map(c => c[key]))].filter(Boolean).sort();
+  };
+
+  return (
+    <section>
+      <div className="page-header">
+        <h2>Characters</h2>
+        <Link to="/characters/new" className="btn-primary">+ Create Character</Link>
+      </div>
+      {activeFilters.length > 0 && (
+        <div className="active-filters-container">
+          <span className="active-filters-label">Active Filters:</span>
+          <div className="pills-wrapper">
+            {activeFilters.map(([key, value]) => (
+              <span key={key} className="filter-pill">
+                {key}: {value}
+                <button className="pill-close" onClick={() => handleFilterChange(key, '')}>&times;</button>
+              </span>
+            ))}
+          </div>
+          <button className="btn-secondary" onClick={() => setColumnFilters({})}>Clear All</button>
+        </div>
+      )}
+      <table className="characters-table">
+        <thead>
+          <tr>
+            <th onClick={(e) => handleSort(e, 'name')}>
+              <div className="th-content">
+                <span>Name{getSortIndicator('name')}</span>
+                <ColumnFilter columnKey="name" options={getColumnOptions('name')} onChange={handleFilterChange} value={columnFilters.name} />
+              </div>
+            </th>
+            <th onClick={(e) => handleSort(e, 'race')}>
+              <div className="th-content">
+                <span>Race{getSortIndicator('race')}</span>
+                <ColumnFilter columnKey="race" options={getColumnOptions('race')} onChange={handleFilterChange} value={columnFilters.race} />
+              </div>
+            </th>
+            <th onClick={(e) => handleSort(e, 'class')}>
+              <div className="th-content">
+                <span>Class{getSortIndicator('class')}</span>
+                <ColumnFilter columnKey="class" options={getColumnOptions('class')} onChange={handleFilterChange} value={columnFilters.class} />
+              </div>
+            </th>
+            <th onClick={(e) => handleSort(e, 'status')}>Status{getSortIndicator('status')}</th>
+            <th onClick={(e) => handleSort(e, 'location')}>Last Known Location{getSortIndicator('location')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedAndFilteredCharacters.length > 0 ? (
+            sortedAndFilteredCharacters.map(char => (
+              <tr key={char.id} onClick={() => navigate(`/characters/${char.id}`)}>
+                <td>{char.name}</td>
+                <td>{char.race}</td>
+                <td>{char.class}</td>
+                <td>{char.status}</td>
+                <td>{char.location}</td>
+              </tr>
+            ))
+          ) : (
+            <tr><td colSpan="5">No characters match the current filters.</td></tr>
+          )}
+        </tbody>
+      </table>
+    </section>
+  );
+}
 
 function HomePage({ recentNotes }) {
   return (
@@ -146,6 +347,156 @@ function AllSessionsPage({ notes }) {
   );
 }
 
+function CharacterDetailPage({ characters, notes, onSaveCharacter, onDeleteCharacter }) {
+  const { charId } = useParams();
+  const navigate = useNavigate();
+  const [isEditing, setIsEditing] = useState(false);
+  const [character, setCharacter] = useState(null);
+
+  useEffect(() => {
+    const fetchCharacter = async () => {
+      try {
+        const res = await axios.get(`${CHAR_API_URL}/${charId}`);
+        setCharacter(res.data);
+      } catch (err) {
+        console.error("Error fetching character details:", err);
+        setCharacter(null); // Set to null on error
+      }
+    };
+    fetchCharacter();
+  }, [charId, isEditing]); // Refetch when ID changes or after editing
+
+  const handleDelete = async () => {
+    if (character) {
+      await onDeleteCharacter(character.id);
+      navigate('/characters');
+    }
+  };
+
+  const handleSaveWrapper = async (data) => {
+    const saved = await onSaveCharacter({ ...character, ...data });
+    if (saved) {
+      // Update local state immediately for responsiveness
+      setCharacter(saved);
+      setIsEditing(false);
+    }
+  };
+
+  const addSessionToCharacter = async (sessionId) => {
+    try {
+      // The API is structured as adding a character to a session
+      await axios.post(`${API_URL}/${sessionId}/characters`, { characterId: character.id });
+      // Refetch character to show updated session list
+      const res = await axios.get(`${CHAR_API_URL}/${charId}`);
+      setCharacter(res.data);
+    } catch (err) {
+      console.error("Error adding session to character:", err);
+      alert(err.response?.data?.message || "Could not add session.");
+    }
+  };
+
+  const removeSessionFromCharacter = async (sessionId) => {
+    try {
+      // The API is structured as removing a character from a session
+      await axios.delete(`${API_URL}/${sessionId}/characters/${character.id}`);
+      // Refetch character to show updated session list
+      const res = await axios.get(`${CHAR_API_URL}/${charId}`);
+      setCharacter(res.data);
+    } catch (err) {
+      console.error("Error removing session from character:", err);
+    }
+  };
+
+  // Find sessions that this character is NOT a part of
+  const availableSessions = notes.filter(
+    note => !character?.sessions.some(cs => cs.id === note.id)
+  );
+
+  if (character === null) {
+    // Differentiate between loading and not found
+    const originalChar = characters.find(c => c.id === Number(charId));
+    if (originalChar) {
+      return <h2>Loading Character...</h2>;
+    }
+  }
+
+  if (!character) {
+    return <h2>Character not found. <Link to="/characters">Return to List</Link></h2>;
+  }
+
+  return (
+    <div className="character-detail-page">
+      {isEditing ? (
+        <CharacterForm
+          character={character}
+          onSave={handleSaveWrapper}
+          onCancel={() => setIsEditing(false)}
+          notes={notes}
+        />
+      ) : (
+        <div className="character-detail-card">
+          <div className="page-header">
+            <h2>{character.name}</h2>
+            <div className="note-actions">
+              <button className="btn-primary" onClick={() => setIsEditing(true)}>Edit</button>
+              <button className="btn-danger" onClick={handleDelete}>Delete</button>
+            </div>
+          </div>
+          <div className="character-stats">
+            <span><strong>Race:</strong> {character.race}</span>
+            <span><strong>Class:</strong> {character.class}</span>
+            <span><strong>Status:</strong> {character.status}</span>
+            <span><strong>Location:</strong> {character.location}</span>
+          </div>
+          <h3>Backstory & Notes</h3>
+          <p style={{ whiteSpace: 'pre-wrap' }}>{character.backstory}</p>
+          <hr />
+          <div className="page-header">
+            <h3>Related Sessions</h3>
+            {availableSessions.length > 0 && (
+              <div className="add-character-to-session">
+                <select
+                  onChange={(e) => addSessionToCharacter(e.target.value)}
+                  value=""
+                  className="btn-secondary"
+                >
+                  <option value="" disabled>+ Add to Session</option>
+                  {availableSessions.map(note => <option key={note.id} value={note.id}>{note.title}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+          {character.sessions && character.sessions.length > 0 ? (
+            <div className="related-items-list">
+              {character.sessions.map(session => (
+                <span key={session.id} className="related-item-pill editable">
+                  <Link to={`/notes/${session.id}`}>{session.title}</Link>
+                  <button className="pill-close" onClick={() => removeSessionFromCharacter(session.id)}>&times;</button>
+                </span>
+              ))}
+            </div>
+          ) : <p>This character has not appeared in any sessions yet.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddCharacterPage({ onSaveCharacter, notes }) {
+  const navigate = useNavigate();
+
+  const handleSave = async (charData) => {
+    const newChar = await onSaveCharacter(charData);
+    if (newChar) {
+      navigate('/characters'); // Navigate to the characters list
+    }
+  };
+
+  return (
+    <CharacterForm character={{}} onSave={handleSave} onCancel={() => navigate('/characters')} notes={notes} />
+  );
+}
+
 function AddNotePage({ onSaveNote }) {
   const navigate = useNavigate();
 
@@ -161,12 +512,24 @@ function AddNotePage({ onSaveNote }) {
   );
 }
 
-function NoteDetailPage({ notes, onSaveNote, onDeleteNote }) {
+function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote }) {
   const { noteId } = useParams();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
+  const [note, setNote] = useState(null);
 
-  const note = notes.find(n => n.id === Number(noteId));
+  useEffect(() => {
+    const fetchNote = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/${noteId}`);
+        setNote(res.data);
+      } catch (err) {
+        console.error("Error fetching note details:", err);
+        setNote(null);
+      }
+    };
+    fetchNote();
+  }, [noteId, isEditing]);
 
   const handleDelete = async () => {
     if (note) {
@@ -174,6 +537,49 @@ function NoteDetailPage({ notes, onSaveNote, onDeleteNote }) {
       navigate('/sessions'); // Navigate to sessions list after delete
     }
   };
+
+  const handleSaveWrapper = async (data) => {
+    const saved = await onSaveNote({ ...note, ...data });
+    if (saved) {
+      setNote(saved);
+      setIsEditing(false);
+    }
+  };
+
+  const addCharacterToSession = async (characterId) => {
+    try {
+      await axios.post(`${API_URL}/${noteId}/characters`, { characterId: Number(characterId) });
+      // Refetch note to show updated character list
+      const res = await axios.get(`${API_URL}/${noteId}`);
+      setNote(res.data);
+    } catch (err) {
+      console.error("Error adding character to session:", err);
+      alert(err.response?.data?.message || "Could not add character.");
+    }
+  };
+
+  const removeCharacterFromSession = async (characterId) => {
+    try {
+      await axios.delete(`${API_URL}/${noteId}/characters/${characterId}`);
+      // Refetch note to show updated character list
+      const res = await axios.get(`${API_URL}/${noteId}`);
+      setNote(res.data);
+    } catch (err) {
+      console.error("Error removing character from session:", err);
+    }
+  };
+
+  const availableCharacters = characters.filter(
+    char => !note?.characters.some(nc => nc.id === char.id)
+  );
+
+  if (note === null) {
+    // Differentiate between loading and not found
+    const originalNote = notes.find(n => n.id === Number(noteId));
+    if (originalNote) {
+      return <h2>Loading Session...</h2>;
+    }
+  }
 
   if (!note) {
     return <h2>Note not found. <Link to="/">Go Home</Link></h2>;
@@ -184,10 +590,7 @@ function NoteDetailPage({ notes, onSaveNote, onDeleteNote }) {
       {isEditing ? (
         <NoteForm
           note={note}
-          onSave={async (data) => {
-            await onSaveNote({ ...note, ...data });
-            setIsEditing(false);
-          }}
+          onSave={handleSaveWrapper}
           onCancel={() => setIsEditing(false)}
         />
       ) : (
@@ -198,6 +601,38 @@ function NoteDetailPage({ notes, onSaveNote, onDeleteNote }) {
             <button className="btn-primary" onClick={() => setIsEditing(true)}>Edit</button>
             <button className="btn-danger" onClick={handleDelete}>Delete</button>
           </div>
+          <hr />
+          <div className="page-header">
+            <h3>Characters in this Session</h3>
+            <div className="header-actions-group">
+              {availableCharacters.length > 0 && (
+                <div className="add-character-to-session">
+                  <select
+                    onChange={(e) => addCharacterToSession(e.target.value)}
+                    value=""
+                    className="btn-secondary"
+                  >
+                    <option value="" disabled>+ Add Character</option>
+                    {availableCharacters.map(char => (
+                      <option key={char.id} value={char.id}>{char.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <Link to="/characters/new" className="btn-primary">+ Create Character</Link>
+            </div>
+          </div>
+          {note.characters && note.characters.length > 0 ? (
+            <div className="related-items-list">
+              {note.characters.map(char => (
+                <span key={char.id} className="related-item-pill editable">
+                  <Link to={`/characters/${char.id}`}>{char.name}</Link>
+                  <button className="pill-close" onClick={() => removeCharacterFromSession(char.id)}>&times;</button>
+                </span>
+              ))}
+            </div>
+          ) : <p>No characters have been added to this session yet.</p>}
+
         </div>
       )}
     </div>
@@ -243,6 +678,174 @@ function NoteForm({ note, onSave, onCancel }) {
         <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
       </div>
     </form>
+  );
+}
+
+// --- Reusable Character Form Component ---
+function CharacterForm({ character, onSave, onCancel, notes = [] }) {
+  const [name, setName] = useState(character.name || '');
+  const [status, setStatus] = useState(character.status || '');
+  const [location, setLocation] = useState(character.location || '');
+  const [race, setRace] = useState(character.race || '');
+  const [charClass, setCharClass] = useState(character.class || '');
+  const [backstory, setBackstory] = useState(character.backstory || '');
+  const [selectedSessions, setSelectedSessions] = useState(character.sessions?.map(s => s.id) || []);
+
+  const races = ['Human', 'Elf', 'Dwarf', 'Halfling', 'Dragonborn', 'Gnome', 'Half-Elf', 'Half-Orc', 'Tiefling'];
+  const classes = ['Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard'];
+
+  const handleSessionToggle = (sessionId) => {
+    setSelectedSessions(prev =>
+      prev.includes(sessionId) ? prev.filter(id => id !== sessionId) : [...prev, sessionId]
+    );
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({ name, status, location, race, class: charClass, backstory, sessionIds: selectedSessions });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="note-form">
+      <h3>{character.id ? 'Edit Character' : 'Create New Character'}</h3>
+      <div className="form-grid">
+        <input
+          type="text"
+          placeholder="Character Name"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          required
+        />
+        <input
+          type="text"
+          placeholder="Status (e.g., Alive, Missing)"
+          value={status}
+          onChange={e => setStatus(e.target.value)}
+        />
+        <input
+          type="text"
+          placeholder="Last Known Location"
+          value={location}
+          onChange={e => setLocation(e.target.value)}
+        />
+        <select value={race} onChange={e => setRace(e.target.value)} required>
+          <option value="" disabled>Select a Race</option>
+          {races.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <select value={charClass} onChange={e => setCharClass(e.target.value)} required>
+          <option value="" disabled>Select a Class</option>
+          {classes.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+      <textarea
+        placeholder="Backstory, notes, and other details..."
+        value={backstory}
+        onChange={e => setBackstory(e.target.value)}
+      />
+      <div className="form-section form-section-flush-header">
+        <div className="page-header">
+          <h4>Link to Sessions</h4>
+          <div className="add-character-to-session">
+            <select
+              onChange={(e) => handleSessionToggle(Number(e.target.value))}
+              value=""
+              className="btn-secondary"
+            >
+              <option value="" disabled>+ Add to Session</option>
+              {notes
+                .filter(note => !selectedSessions.includes(note.id))
+                .map(note => <option key={note.id} value={note.id}>{note.title}</option>)
+              }
+            </select>
+          </div>
+        </div>
+        <div className="related-items-list">
+          {selectedSessions.length > 0 ? (
+            notes
+              .filter(note => selectedSessions.includes(note.id))
+              .map(note => (
+                <span key={note.id} className="related-item-pill editable">
+                  {/* Use a span instead of a Link since we are in a form */}
+                  <span>{note.title}</span>
+                  <button type="button" className="pill-close" onClick={() => handleSessionToggle(note.id)}>&times;</button>
+                </span>
+              ))
+          ) : (
+            <p className="no-items-text">No sessions linked yet.</p>
+          )}
+        </div>
+      </div>
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">Save Character</button>
+        <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+// --- Reusable Column Filter Component ---
+function ColumnFilter({ columnKey, options, onChange, value }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const filterRef = React.useRef(null);
+
+  const filteredOptions = options.filter(opt =>
+    opt.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleSelect = (option) => {
+    onChange(columnKey, option);
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="filter-wrapper" ref={filterRef}>
+      <span
+        className={`filter-icon ${value ? 'active' : ''}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+      >
+        &#9662; {/* Down arrow */}
+      </span>
+      {isOpen && (
+        <div className="filter-dropdown">
+          <input
+            type="text"
+            className="filter-search"
+            placeholder="Search..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onClick={e => e.stopPropagation()}
+          />
+          <ul className="filter-list">
+            <li onClick={() => handleSelect('')}>-- All --</li>
+            {filteredOptions.map(opt => (
+              <li
+                key={opt}
+                onClick={() => handleSelect(opt)}
+                className={opt === value ? 'selected' : ''}
+              >
+                {opt}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 
