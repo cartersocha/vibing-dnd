@@ -4,8 +4,6 @@ import axios from 'axios';
 import './App.css';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
-import Calendar from 'react-calendar';
-import 'react-calendar/dist/Calendar.css';
 
 const API_URL = 'http://localhost:5001/api/notes';
 const CHAR_API_URL = 'http://localhost:5001/api/characters';
@@ -215,8 +213,6 @@ function App() {
         <nav className="main-nav">
           <NavLink to="/sessions">Sessions</NavLink>
           <NavLink to="/characters">Characters</NavLink>
-          <NavLink to="/calendar">Calendar</NavLink>
-          <NavLink to="/map">Map</NavLink>
         </nav>
       </aside>
 
@@ -273,16 +269,6 @@ function App() {
                   onDataChange={handleDataChange}
                 />
               </div>
-            } />
-          <Route
-            path="/calendar"
-            element={
-              <div className="container"><CalendarPage notes={numberedNotes} /></div>
-            } />
-          <Route
-            path="/map"
-            element={
-              <div className="container"><MapPage /></div>
             } />
         </Routes>
       </div>
@@ -589,108 +575,6 @@ function AllSessionsPage({ notes }) {
           </div></Link>
         ))}
       </div>
-    </section>
-  );
-}
-
-function MapPage() {
-  return (
-    <section>
-      <div className="page-header">
-        <h2>World Map</h2>
-      </div>
-      <div className="card map-placeholder-container">
-        <div className="map-placeholder">
-          <p>The world map will be displayed here.</p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function CalendarPage({ notes }) {
-  const navigate = useNavigate();
-  const [activeDate, setActiveDate] = useState(null);
-  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
-  const [sessionsForPopup, setSessionsForPopup] = useState([]);
-
-  // Create a lookup map for session dates for efficient access
-  const sessionDateMap = React.useMemo(() => {
-    const map = new Map();
-    notes.forEach(note => {
-      if (note.date) {
-        // Normalize date to ignore time zones and time parts
-        const dateKey = new Date(note.date).toDateString();
-        if (!map.has(dateKey)) {
-          map.set(dateKey, []);
-        }
-        map.get(dateKey).push(note);
-      }
-    });
-    return map;
-  }, [notes]);
-
-  const handleMouseEnter = (event, date) => {
-    const dateKey = date.toDateString();
-    if (sessionDateMap.has(dateKey)) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      setPopupPosition({ top: rect.bottom + window.scrollY + 5, left: rect.left + window.scrollX });
-      setSessionsForPopup(sessionDateMap.get(dateKey));
-      setActiveDate(date);
-    }
-  };
-
-  const handleMouseLeave = () => {
-    setActiveDate(null);
-    setSessionsForPopup([]);
-  };
-
-  const tileContent = ({ date, view }) => {
-    if (view === 'month') {
-      const dateKey = date.toDateString();
-      if (sessionDateMap.has(dateKey)) {
-        return (
-          <div className="session-marker-wrapper" onMouseEnter={(e) => handleMouseEnter(e, date)} onMouseLeave={handleMouseLeave}>
-            <div className="session-marker"></div>
-          </div>
-        );
-      }
-    }
-    return null;
-  };
-
-  const handleDayClick = (value) => {
-    const dateKey = value.toDateString();
-    if (sessionDateMap.has(dateKey)) {
-      const sessionsOnDay = sessionDateMap.get(dateKey);
-      // Navigate to the first session on that day
-      navigate(`/notes/${sessionsOnDay[0].id}`);
-    }
-  };
-
-  return (
-    <section>
-      <div className="page-header">
-        <h2>Campaign Calendar</h2>
-      </div>
-      <div className="card calendar-container">
-        <Calendar
-          tileContent={tileContent}
-          onClickDay={handleDayClick}
-        />
-      </div>
-      {activeDate && sessionsForPopup.length > 0 && (
-        <div className="calendar-popup" style={{ top: `${popupPosition.top}px`, left: `${popupPosition.left}px` }}>
-          <div className="calendar-popup-header">
-            {activeDate.toLocaleDateString()}
-          </div>
-          <ul>
-            {sessionsForPopup.map(session => (
-              <li key={session.id}>{session.title}</li>
-            ))}
-          </ul>
-        </div>
-      )}
     </section>
   );
 }

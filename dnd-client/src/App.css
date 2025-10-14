@@ -853,22 +853,6 @@ a:hover {
   vertical-align: middle;
 }
 
-.pill-close:hover {
-  color: white;
-  transform: scale(1.2);
-}
-
-/* Session characters styling */
-.session-characters {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border-color);
-}
-
-.session-characters .related-items-list {
-  margin-bottom: 0;
-}
-
 /* Responsive adjustments */
 @media (max-width: 1024px) {
   .character-detail-layout {
