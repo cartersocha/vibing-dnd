@@ -458,7 +458,7 @@ app.post('/api/characters', (req, res) => {
       if (err) {
         return res.status(500).json({ message: 'Error uploading file.', error: err });
       }
-      const { name, race, class: charClass, status, location, backstory, playerType } = req.body;
+      const { name, race, class: charClass, status, location, backstory, playerType } = req.body; // Correctly aliasing 'class'
       if (!name || !race || !charClass || !playerType) {
         return res.status(400).json({ message: 'Name, race, and class are required' });
       }
@@ -484,7 +484,7 @@ app.post('/api/characters', (req, res) => {
         .insert({
           name: sanitizedBody.name,
           race: sanitizedBody.race,
-          class: charClass,
+          class: sanitizedBody.class, // Use the sanitized value
           status: sanitizedBody.status,
           location: sanitizedBody.location,
           backstory: sanitizedBody.backstory,
@@ -567,7 +567,7 @@ app.put('/api/characters/:id', (req, res) => {
         .update({
           name: sanitizedBody.name || existingChar.name,
           race: sanitizedBody.race || existingChar.race,
-          class: sanitizedBody.class || existingChar.class,
+          class: sanitizedBody.class || existingChar.class, // Use the sanitized value
           status: sanitizedBody.status || existingChar.status,
           location: sanitizedBody.location || existingChar.location,
           backstory: sanitizedBody.backstory || existingChar.backstory,
