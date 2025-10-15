@@ -9,8 +9,12 @@ const PORT = 5001;
 
 app.use(cors());
 app.use(express.json());
-// Serve static files from the 'public' directory
-app.use(express.static('public'));
+
+// --- Static File Serving for Production ---
+// Serve uploaded images from the 'public/uploads' directory, making them available at /uploads
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+// Serve the built React app's static files
+app.use(express.static(path.join(__dirname, '../dnd-client/build')));
 
 // --- Multer Configuration for File Uploads ---
 const storage = multer.diskStorage({
@@ -292,6 +296,12 @@ app.delete('/api/notes/:noteId/characters/:characterId', (req, res) => {
   );
 
   res.status(204).send();
+});
+
+// The "catchall" handler: for any request that doesn't match one above,
+// send back React's index.html file.
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dnd-client/build/index.html'));
 });
 
 app.listen(PORT, () => console.log(`✅ Backend running at http://localhost:${PORT}`));
