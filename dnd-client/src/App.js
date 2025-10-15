@@ -8,7 +8,6 @@ import rehypeRaw from 'rehype-raw';
 const API_URL = '/api/notes';
 const CHAR_API_URL = '/api/characters';
 
-// This is not secure for a real production app, but it's a simple gate for a portfolio project.
 const ACCESS_PASSWORD = 'rat palace';
 
 function App() {
