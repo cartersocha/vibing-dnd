@@ -19,8 +19,11 @@
       "dest": "/dnd-server/server.js"
     },
     {
-      "src": "/(.*)",
-      "dest": "/dnd-client/build/index.html"
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
     }
   ]
 }
