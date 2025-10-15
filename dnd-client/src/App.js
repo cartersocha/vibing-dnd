@@ -664,7 +664,7 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
         <div className="character-detail-layout">
           <div className="character-detail-main">
             <div className="page-header">
-              <h2><span className="character-name-label">Character Name:</span> {character.name}</h2>
+              <h2> {character.name}</h2>
               <div className="header-actions-group">
                 <button className="btn btn-secondary" onClick={() => setIsEditing(true)}>Edit</button>
                 <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
@@ -1011,7 +1011,7 @@ function NoteForm({ note, onSave, onCancel, characters = [] }) {
         </div>
       </div>
       <div className="form-actions">
-        <button type="submit" className="btn btn-primary">Save Note</button>
+        <button type="submit" className="btn btn-primary">Save Session</button>
         <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
       </div>
     </form>
