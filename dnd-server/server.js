@@ -652,10 +652,8 @@ app.delete('/api/notes/:noteId/characters/:characterId', async (req, res) => {
   }
 });
 
-if (require.main === module) {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Backend running on port ${PORT}`);
-  });
-}
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Backend running on port ${PORT}`);
+});
 
 module.exports = app;
