@@ -14,10 +14,7 @@
     }
   ],
   "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/dnd-server/server.js"
-    },
+    
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"

@@ -63,7 +63,8 @@ app.get('/api/notes', async (_req, res) => {
 });
 
 // Create session
-app.post('/api/notes', async (req, res) => {
+// parse form-data fields (no files) if client sends FormData
+app.post('/api/notes', upload.none(), async (req, res) => {
   try {
     const { title, date, content, image_url } = req.body;
     const clean = {
@@ -94,7 +95,7 @@ app.get('/api/notes/:id', async (req, res) => {
 });
 
 // Update session
-app.put('/api/notes/:id', async (req, res) => {
+app.put('/api/notes/:id', upload.none(), async (req, res) => {
   try {
     const { title, date, content, image_url } = req.body;
     const patch = {
@@ -141,7 +142,7 @@ app.get('/api/characters', async (_req, res) => {
 });
 
 // Create character
-app.post('/api/characters', async (req, res) => {
+app.post('/api/characters', upload.none(), async (req, res) => {
   try {
     const { name, race, class: klass, status, location, backstory, image_url, player_type } = req.body;
 
@@ -165,7 +166,7 @@ app.post('/api/characters', async (req, res) => {
 });
 
 // Update character
-app.put('/api/characters/:id', async (req, res) => {
+app.put('/api/characters/:id', upload.none(), async (req, res) => {
   try {
     const { name, race, class: klass, status, location, backstory, image_url, player_type } = req.body;
 
@@ -205,7 +206,7 @@ app.delete('/api/characters/:id', async (req, res) => {
 // ==============================
 
 // Add character to session
-app.post('/api/notes/:noteId/characters', async (req, res) => {
+app.post('/api/notes/:noteId/characters', upload.none(), async (req, res) => {
   try {
     const { character_id } = req.body;
     const note_id = Number(req.params.noteId);
