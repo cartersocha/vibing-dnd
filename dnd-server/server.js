@@ -181,7 +181,7 @@ app.post('/api/notes', (req, res) => {
       if (err) {
         return res.status(500).json({ message: 'Error uploading file.', error: err });
       }
-      const { title, content, date } = req.body;
+      const { title, content, date, characterIds } = req.body;
       if (!title || !content) return res.status(400).json({ message: 'Title and content required' });
 
       // Check for existing note with same title
@@ -221,6 +221,22 @@ app.post('/api/notes', (req, res) => {
         .single();
 
       if (error) throw error;
+
+      // If characterIds are provided, create the relationships
+      if (characterIds && newNote) {
+        const ids = Array.isArray(characterIds) ? characterIds : [characterIds];
+        const relationships = ids.map(charId => ({
+          session_id: newNote.id,
+          character_id: parseInt(charId)
+        }));
+
+        if (relationships.length > 0) {
+          const { error: relationshipError } = await supabase
+            .from('session_characters')
+            .insert(relationships);
+          if (relationshipError) throw relationshipError;
+        }
+      }
 
       res.status(201).json({
         id: newNote.id,
