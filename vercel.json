@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "dnd-server/server.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "dnd-client/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "dnd-server/server.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "dnd-client/$1"
+    }
+  ]
+}
