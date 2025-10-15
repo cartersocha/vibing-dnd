@@ -16,12 +16,12 @@
   "routes": [
     {
       "src": "/api/_diag",
-      "dest": "/dnd-server/server.js",
+      "dest": "/dnd-client/api/_diag.js",
       "methods": ["GET", "POST", "OPTIONS"]
     },
     {
       "src": "/api/(.*)",
-      "dest": "/dnd-server/server.js",
+      "dest": "/dnd-client/api/$1",
       "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     },
     {
