@@ -105,8 +105,7 @@ function App() {
           }
         }
 
-        const response = await noteService.createNote(formData);
-        const newNote = response.data;
+        const newNote = await noteService.createNote(formData);
         setNotes([...notes, newNote].sort((a, b) => Number(b.id) - Number(a.id)));
         return newNote;
       }
@@ -154,8 +153,7 @@ function App() {
           formData.append(key, charData[key]);
         }
 
-        const response = await characterService.createCharacter(formData);
-        const newChar = response.data;
+        const newChar = await characterService.createCharacter(formData);
 
         // If sessions were selected, create those relationships now
         if (charData.sessionIds && charData.sessionIds.length > 0) {
