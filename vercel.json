@@ -17,10 +17,6 @@
     {
       "src": "/api/(.*)",
       "dest": "/dnd-server/server.js"
-    },
-    {
-      "src": "/(.*)",
-      "handle": "filesystem"
     }
   ]
 }
