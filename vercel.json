@@ -16,14 +16,22 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/dnd-server/server.js"
+      "dest": "dnd-server/server.js",
+      "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    },
+    {
+      "src": "/uploads/(.*)",
+      "dest": "dnd-server/public/uploads/$1",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable"
+      }
     },
     {
       "handle": "filesystem"
     },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "dnd-client/build/index.html"
     }
   ]
 }
