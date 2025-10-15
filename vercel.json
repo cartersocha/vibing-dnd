@@ -17,6 +17,13 @@
     {
       "src": "/api/(.*)",
       "dest": "/dnd-server/server.js"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
     }
   ]
 }
