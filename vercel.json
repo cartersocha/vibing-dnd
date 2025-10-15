@@ -16,7 +16,7 @@
   "routes": [
     {
       "src": "/api/_diag",
-      "dest": "/dnd-client/api/_diag.js",
+      "dest": "/api/_diag.js",
       "methods": ["GET", "POST", "OPTIONS"]
     },
     {
