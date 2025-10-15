@@ -10,10 +10,10 @@ const PORT = 5001;
 app.use(cors());
 app.use(express.json());
 
-// --- Static File Serving for Production ---
-// Serve uploaded images from the 'public/uploads' directory, making them available at /uploads
+// --- Static File Serving ---
+// Serve uploaded images from the 'public/uploads' directory
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
-// Serve the built React app's static files
+// Serve the built React app for production
 app.use(express.static(path.join(__dirname, '../dnd-client/build')));
 
 // --- Multer Configuration for File Uploads ---
@@ -298,8 +298,7 @@ app.delete('/api/notes/:noteId/characters/:characterId', (req, res) => {
   res.status(204).send();
 });
 
-// The "catchall" handler: for any request that doesn't match one above,
-// send back React's index.html file.
+// Catch-all handler for any request that doesn't match one above
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../dnd-client/build/index.html'));
 });
