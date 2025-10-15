@@ -3,6 +3,7 @@ const cors = require('cors');
 const sanitizeHtml = require('sanitize-html');
 const multer = require('multer');
 const path = require('path');
+const { put, list, del } = require('@vercel/blob');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -12,21 +13,40 @@ app.use(express.json());
 
 
 // --- Multer Configuration for File Uploads ---
-const storage = multer.diskStorage({
-  destination: './public/uploads/',
-  filename: function(req, file, cb){
-    cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
-  }
-});
+const storage = multer.memoryStorage(); // Store files in memory temporarily
 
 const upload = multer({
   storage: storage,
   limits: { fileSize: 10000000 } // 10MB limit
-}).single('image'); // 'image' is the name of the form field
+}).single('image');
 
-// --- Static File Serving for Uploaded Images ---
-// This makes images in the 'public/uploads' directory available at the /uploads URL path
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+// Helper function to upload to Vercel Blob
+async function uploadToBlob(file) {
+  try {
+    const filename = `${file.fieldname}-${Date.now()}${path.extname(file.originalname)}`;
+    const blob = await put(filename, file.buffer, {
+      access: 'public',
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+    return blob.url;
+  } catch (error) {
+    console.error('Error uploading to Vercel Blob:', error);
+    throw error;
+  }
+}
+
+// Helper function to delete from Vercel Blob
+async function deleteFromBlob(url) {
+  try {
+    if (!url) return;
+    const filename = url.split('/').pop();
+    await del(filename, {
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+  } catch (error) {
+    console.error('Error deleting from Vercel Blob:', error);
+  }
+}
 
 // --- In-Memory Database ---
 let notes = [
@@ -163,81 +183,101 @@ app.get('/api/characters', (req, res) => {
 
 // POST a new character
 app.post('/api/characters', (req, res) => {
-  upload(req, res, (err) => {
-    if (err) {
-      return res.status(500).json({ message: 'Error uploading file.', error: err });
-    }
-    const { name, race, class: charClass, status, location, backstory, playerType } = req.body;
-    if (!name || !race || !charClass || !playerType) {
-      return res.status(400).json({ message: 'Name, race, and class are required' });
-    }
-
-    const sanitizedBody = {};
-    for (const key in req.body) {
-      if (key === 'backstory') {
-        sanitizedBody[key] = sanitizeHtml(req.body[key]); // Use default safe tags for backstory
-      } else {
-        sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+  upload(req, res, async (err) => {
+    try {
+      if (err) {
+        return res.status(500).json({ message: 'Error uploading file.', error: err });
       }
-    }
+      const { name, race, class: charClass, status, location, backstory, playerType } = req.body;
+      if (!name || !race || !charClass || !playerType) {
+        return res.status(400).json({ message: 'Name, race, and class are required' });
+      }
 
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
-    const newChar = { id: nextCharId++, ...sanitizedBody, imageUrl };
-    characters.push(newChar);
-    res.status(201).json(newChar);
+      const sanitizedBody = {};
+      for (const key in req.body) {
+        if (key === 'backstory') {
+          sanitizedBody[key] = sanitizeHtml(req.body[key]); // Use default safe tags for backstory
+        } else {
+          sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+        }
+      }
+
+      // Handle image upload to Vercel Blob
+      let imageUrl = null;
+      if (req.file) {
+        imageUrl = await uploadToBlob(req.file);
+      }
+
+      const newChar = { id: nextCharId++, ...sanitizedBody, imageUrl };
+      characters.push(newChar);
+      res.status(201).json(newChar);
+    } catch (error) {
+      console.error('Error creating character:', error);
+      res.status(500).json({ message: 'Error creating character', error: error.message });
+    }
   });
 });
 
 // PUT (update) a character
 app.put('/api/characters/:id', (req, res) => {
-  upload(req, res, (err) => {
-    if (err) {
-      return res.status(500).json({ message: 'Error uploading file.', error: err });
-    }
-
-    const charId = parseInt(req.params.id);
-    const charIndex = characters.findIndex(c => c.id === charId);
-
-    if (charIndex === -1) {
-      return res.status(404).json({ message: 'Character not found' });
-    }
-
-    // Start with a copy of the existing character
-    const existingChar = { ...characters[charIndex] };
-
-    // Sanitize the incoming data
-    const sanitizedBody = {};
-    for (const key in req.body) {
-      // Skip empty values unless they're intentionally falsy
-      if (req.body[key] === null || req.body[key] === undefined) continue;
-
-      if (key === 'backstory') {
-        sanitizedBody[key] = sanitizeHtml(req.body[key]); // Use default safe tags for backstory
-      } else if (key === 'id') {
-        sanitizedBody[key] = parseInt(req.body[key]); // Keep the ID as a number
-      } else {
-        sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+  upload(req, res, async (err) => {
+    try {
+      if (err) {
+        return res.status(500).json({ message: 'Error uploading file.', error: err });
       }
+
+      const charId = parseInt(req.params.id);
+      const charIndex = characters.findIndex(c => c.id === charId);
+
+      if (charIndex === -1) {
+        return res.status(404).json({ message: 'Character not found' });
+      }
+
+      // Start with a copy of the existing character
+      const existingChar = { ...characters[charIndex] };
+
+      // Sanitize the incoming data
+      const sanitizedBody = {};
+      for (const key in req.body) {
+        // Skip empty values unless they're intentionally falsy
+        if (req.body[key] === null || req.body[key] === undefined) continue;
+
+        if (key === 'backstory') {
+          sanitizedBody[key] = sanitizeHtml(req.body[key]); // Use default safe tags for backstory
+        } else if (key === 'id') {
+          sanitizedBody[key] = parseInt(req.body[key]); // Keep the ID as a number
+        } else {
+          sanitizedBody[key] = sanitizeHtml(req.body[key], { allowedTags: [], allowedAttributes: {} });
+        }
+      }
+
+      // Handle the image
+      let imageUrl = existingChar.imageUrl; // Start with existing image
+      if (req.file) {
+        // Delete old image if it exists
+        if (existingChar.imageUrl) {
+          await deleteFromBlob(existingChar.imageUrl);
+        }
+        // Upload new image
+        imageUrl = await uploadToBlob(req.file);
+      } else if (sanitizedBody.imageUrl) {
+        imageUrl = sanitizedBody.imageUrl; // Use provided imageUrl
+      }
+
+      // Create the updated character, ensuring ID is preserved
+      const updatedChar = {
+        ...existingChar,
+        ...sanitizedBody,
+        imageUrl
+      };
+
+      // Update in the array
+      characters[charIndex] = updatedChar;
+      res.json(updatedChar);
+    } catch (error) {
+      console.error('Error updating character:', error);
+      res.status(500).json({ message: 'Error updating character', error: error.message });
     }
-
-    // Handle the image
-    let imageUrl = existingChar.imageUrl; // Start with existing image
-    if (req.file) {
-      imageUrl = `/uploads/${req.file.filename}`; // Use new uploaded image
-    } else if (sanitizedBody.imageUrl) {
-      imageUrl = sanitizedBody.imageUrl; // Use provided imageUrl
-    }
-
-    // Create the updated character, ensuring ID is preserved
-    const updatedChar = {
-      ...existingChar,
-      ...sanitizedBody,
-      imageUrl
-    };
-
-    // Update in the array
-    characters[charIndex] = updatedChar;
-    res.json(updatedChar);
   });
 });
 
@@ -257,15 +297,27 @@ app.get('/api/characters/:id', (req, res) => {
 });
 
 // DELETE a character
-app.delete('/api/characters/:id', (req, res) => {
-  const charId = parseInt(req.params.id);
-  const initialLength = characters.length;
-  characters = characters.filter(c => c.id !== charId);
+app.delete('/api/characters/:id', async (req, res) => {
+  try {
+    const charId = parseInt(req.params.id);
+    const character = characters.find(c => c.id === charId);
 
-  if (characters.length === initialLength) {
-    return res.status(404).json({ message: 'Character not found' });
+    if (!character) {
+      return res.status(404).json({ message: 'Character not found' });
+    }
+
+    // Delete image from Vercel Blob if it exists
+    if (character.imageUrl) {
+      await deleteFromBlob(character.imageUrl);
+    }
+
+    // Remove character from array
+    characters = characters.filter(c => c.id !== charId);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting character:', error);
+    res.status(500).json({ message: 'Error deleting character', error: error.message });
   }
-  res.status(204).send();
 });
 
 // --- RELATIONSHIP API ---
