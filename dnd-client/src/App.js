@@ -8,9 +8,16 @@ import rehypeRaw from 'rehype-raw';
 const API_URL = 'http://localhost:5001/api/notes';
 const CHAR_API_URL = 'http://localhost:5001/api/characters';
 
+// This is not secure for a real production app, but it's a simple gate for a portfolio project.
+const ACCESS_PASSWORD = 'rat palace';
+
 function App() {
   const [notes, setNotes] = useState([]);
   const [characters, setCharacters] = useState([]);
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    // Check session storage to see if user is already authenticated
+    sessionStorage.getItem('dnd-app-authenticated') === 'true'
+  );
   
   const fetchCharacters = useCallback(async () => {
     try {
@@ -34,11 +41,21 @@ function App() {
 
   // Fetch initial data on component mount
   useEffect(() => {
+    if (!isAuthenticated) return; // Don't fetch data if not logged in
     fetchNotes();
     fetchCharacters();
     // The empty dependency array ensures this runs only once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isAuthenticated]); // Re-run if authentication status changes
+
+  const handleLogin = (password) => {
+    if (password === ACCESS_PASSWORD) {
+      sessionStorage.setItem('dnd-app-authenticated', 'true');
+      setIsAuthenticated(true);
+    } else {
+      alert('Incorrect password');
+    }
+  };
 
   const handleSaveNote = async (noteData) => {
     try {
@@ -203,6 +220,10 @@ function App() {
 
   const recentNotes = numberedNotes.slice(0, 3);
 
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
   // Main App component now handles routing
   return (
     <div className="app-layout">
@@ -277,6 +298,42 @@ function App() {
 }
 
 // --- Page Components ---
+
+function LoginPage({ onLogin }) {
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onLogin(password);
+  };
+
+  return (
+    <div className="login-page-container">
+      <div className="login-card">
+        <form onSubmit={handleSubmit}>
+          <h2>Enter Access Code</h2>
+          <div className="form-field">
+            <input
+              id="password"
+              type="password"
+              className="form-input"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              autoFocus
+            />
+          </div>
+          <div className="form-actions" style={{ justifyContent: 'center' }}>
+            <button type="submit" className="btn btn-primary">
+              Enter
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 
 function CharactersPage({ characters, notes }) {
   const navigate = useNavigate();
@@ -664,7 +721,7 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
         <div className="character-detail-layout">
           <div className="character-detail-main">
             <div className="page-header">
-              <h2><span className="character-name-label">Character Name:</span> {character.name}</h2>
+              <h2> {character.name}</h2>
               <div className="header-actions-group">
                 <button className="btn btn-secondary" onClick={() => setIsEditing(true)}>Edit</button>
                 <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
@@ -1011,7 +1068,7 @@ function NoteForm({ note, onSave, onCancel, characters = [] }) {
         </div>
       </div>
       <div className="form-actions">
-        <button type="submit" className="btn btn-primary">Save Note</button>
+        <button type="submit" className="btn btn-primary">Save Session</button>
         <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
       </div>
     </form>
