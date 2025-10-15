@@ -111,11 +111,10 @@ app.put('/api/notes/:id', (req, res) => {
     if (req.body.content) sanitizedBody.content = sanitizeHtml(req.body.content);
     if (req.body.date) sanitizedBody.date = sanitizeHtml(req.body.date, { allowedTags: [], allowedAttributes: {} });
 
-    const existingNote = notes[noteIndex];
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : existingNote.imageUrl;
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : notes[noteIndex].imageUrl;
 
     notes[noteIndex] = { 
-      ...existingNote,
+      ...notes[noteIndex],
       ...sanitizedBody,
       imageUrl
     };
