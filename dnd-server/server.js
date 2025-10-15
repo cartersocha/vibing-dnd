@@ -163,7 +163,7 @@ app.get('/api/notes', async (req, res) => {
         location: sc.characters.location,
         backstory: sc.characters.backstory,
         imageUrl: sc.characters.image_url,
-      playerType: sc.characters.player_type // Keep snake_case from DB
+        playerType: sc.characters.player_type
       }))
     }));
 
@@ -224,10 +224,13 @@ app.post('/api/notes', (req, res) => {
 
       // If characterIds are provided, create the relationships
       if (characterIds && newNote) {
-        const ids = Array.isArray(characterIds) ? characterIds : [characterIds];
+        const ids = (Array.isArray(characterIds) ? characterIds : [characterIds])
+                      .map(id => parseInt(id))
+                      .filter(id => !isNaN(id)); // Filter out any NaN values
+
         const relationships = ids.map(charId => ({
           session_id: newNote.id,
-          character_id: parseInt(charId)
+          character_id: charId
         }));
 
         if (relationships.length > 0) {
@@ -281,8 +284,18 @@ app.get('/api/notes/:id', async (req, res) => {
     // Transform the data to match the expected frontend format
     const noteWithCharacters = {
       ...note,
-      imageUrl: note.image_url,
-      characters: note.session_characters.map(sc => sc.characters)
+      imageUrl: note.image_url, // Map snake_case to camelCase
+      characters: note.session_characters.map(sc => ({
+        id: sc.characters.id,
+        name: sc.characters.name,
+        race: sc.characters.race,
+        class: sc.characters.class,
+        status: sc.characters.status,
+        location: sc.characters.location,
+        backstory: sc.characters.backstory,
+        imageUrl: sc.characters.image_url,
+        playerType: sc.characters.player_type
+      }))
     };
 
     res.json(noteWithCharacters);
@@ -380,7 +393,7 @@ app.put('/api/notes/:id', (req, res) => {
           location: sc.characters.location,
           backstory: sc.characters.backstory,
           imageUrl: sc.characters.image_url,
-          playerType: sc.characters.player_type
+          playerType: sc.characters.player_type // Map snake_case to camelCase
         }))
       };
 
@@ -456,8 +469,16 @@ app.get('/api/characters', async (req, res) => {
       location: character.location,
       backstory: character.backstory,
       imageUrl: character.image_url,
-      playerType: character.player_type, // Keep snake_case from DB
-      sessions: character.session_characters.map(sc => sc.notes)
+      playerType: character.player_type, // Map snake_case to camelCase
+      sessions: character.session_characters.map(sc => ({
+        id: sc.notes.id,
+        title: sc.notes.title,
+        date: sc.notes.date,
+        content: sc.notes.content,
+        imageUrl: sc.notes.image_url
+        // We don't need to nest characters back inside sessions here
+        // to avoid circular data structures.
+      }))
     }));
 
     res.json(charactersWithSessions);
@@ -521,7 +542,7 @@ app.post('/api/characters', (req, res) => {
         location: newChar.location,
         backstory: newChar.backstory,
         imageUrl: newChar.image_url,
-        playerType: newChar.player_type // Keep snake_case from DB
+        playerType: newChar.player_type // Map snake_case to camelCase
       });
     } catch (error) {
       console.error('Error creating character:', error);
@@ -605,7 +626,7 @@ app.put('/api/characters/:id', (req, res) => {
         location: updatedChar.location,
         backstory: updatedChar.backstory,
         imageUrl: updatedChar.image_url,
-        playerType: updatedChar.player_type // Keep snake_case from DB
+        playerType: updatedChar.player_type // Map snake_case to camelCase
       });
     } catch (error) {
       console.error('Error updating character:', error);

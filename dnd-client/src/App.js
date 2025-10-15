@@ -23,8 +23,8 @@ function App() {
   const fetchCharacters = useCallback(async () => {
     try {
       const res = await characterService.fetchCharacters();
-      // Sort alphabetically by name
-      setCharacters(res.data.sort((a, b) => a.name.localeCompare(b.name)));
+      // The service now returns the data directly
+      setCharacters(res.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (err) {
       console.error('Error fetching characters:', err);
     }
@@ -33,8 +33,8 @@ function App() {
   const fetchNotes = useCallback(async () => {
     try {
       const res = await noteService.fetchNotes();
-      // Sort descending by ID (newest first)
-      setNotes(res.data.sort((a, b) => Number(b.id) - Number(a.id)));
+      // The service now returns the data directly
+      setNotes(res.sort((a, b) => Number(b.id) - Number(a.id)));
     } catch (err) {
       console.error('Error fetching notes:', err);
     }
@@ -106,8 +106,9 @@ function App() {
         }
 
         const response = await noteService.createNote(formData);
-        setNotes([...notes, response.data].sort((a, b) => Number(b.id) - Number(a.id)));
-        return response.data; // Assuming noteService.createNote returns an axios response object
+        const newNote = response.data;
+        setNotes([...notes, newNote].sort((a, b) => Number(b.id) - Number(a.id)));
+        return newNote;
       }
     } catch (err) {
       console.error('Error saving note:', err);
@@ -153,13 +154,13 @@ function App() {
           formData.append(key, charData[key]);
         }
 
-        const newChar = await characterService.createCharacter(formData);
+        const response = await characterService.createCharacter(formData);
+        const newChar = response.data;
 
         // If sessions were selected, create those relationships now
         if (charData.sessionIds && charData.sessionIds.length > 0) {
           const relationshipPromises = charData.sessionIds.map(sessionId =>
-            // Using api directly as this is a relationship call
-            api.post(`/notes/${sessionId}/characters`, { characterId: newChar.id })
+            noteService.addCharacterToSession(sessionId, newChar.id)
           );
           await Promise.all(relationshipPromises);
         }
