@@ -7,7 +7,7 @@ const baseURL = process.env.NODE_ENV === 'production'
 const api = axios.create({
   baseURL,
   headers: {
-    'Content-Type': 'application/json',
+    'Accept': 'application/json',
   },
 });
 
