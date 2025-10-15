@@ -7,7 +7,7 @@ export const fetchCharacters = async () => {
 
 export const createCharacter = async (formData) => {
   const response = await api.post('/characters', formData);
-  return response.data;
+  return response;
 };
 
 export const updateCharacter = async (id, formData) => {

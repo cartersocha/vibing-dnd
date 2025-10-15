@@ -163,7 +163,7 @@ app.get('/api/notes', async (req, res) => {
         location: sc.characters.location,
         backstory: sc.characters.backstory,
         imageUrl: sc.characters.image_url,
-        playerType: sc.characters.player_type
+      playerType: sc.characters.player_type // Keep snake_case from DB
       }))
     }));
 
@@ -244,7 +244,7 @@ app.post('/api/notes', (req, res) => {
         date: newNote.date,
         content: newNote.content,
         imageUrl: newNote.image_url,
-        characters: []
+        characters: [] // Start with no characters, frontend will refetch
       });
     } catch (error) {
       console.error('Error creating note:', error);
@@ -456,7 +456,7 @@ app.get('/api/characters', async (req, res) => {
       location: character.location,
       backstory: character.backstory,
       imageUrl: character.image_url,
-      playerType: character.player_type,
+      playerType: character.player_type, // Keep snake_case from DB
       sessions: character.session_characters.map(sc => sc.notes)
     }));
 
@@ -505,7 +505,7 @@ app.post('/api/characters', (req, res) => {
           location: sanitizedBody.location,
           backstory: sanitizedBody.backstory,
           image_url: imageUrl,
-          player_type: sanitizedBody.playerType
+          player_type: sanitizedBody.playerType // Correctly map playerType to player_type
         })
         .select()
         .single();
@@ -521,7 +521,7 @@ app.post('/api/characters', (req, res) => {
         location: newChar.location,
         backstory: newChar.backstory,
         imageUrl: newChar.image_url,
-        playerType: newChar.player_type
+        playerType: newChar.player_type // Keep snake_case from DB
       });
     } catch (error) {
       console.error('Error creating character:', error);
@@ -588,7 +588,7 @@ app.put('/api/characters/:id', (req, res) => {
           location: sanitizedBody.location || existingChar.location,
           backstory: sanitizedBody.backstory || existingChar.backstory,
           image_url: imageUrl,
-          player_type: sanitizedBody.playerType || existingChar.player_type
+          player_type: sanitizedBody.playerType || existingChar.player_type // Correctly map playerType
         })
         .eq('id', charId)
         .select()
@@ -605,7 +605,7 @@ app.put('/api/characters/:id', (req, res) => {
         location: updatedChar.location,
         backstory: updatedChar.backstory,
         imageUrl: updatedChar.image_url,
-        playerType: updatedChar.player_type
+        playerType: updatedChar.player_type // Keep snake_case from DB
       });
     } catch (error) {
       console.error('Error updating character:', error);

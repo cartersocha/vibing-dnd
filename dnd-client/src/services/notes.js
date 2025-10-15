@@ -7,7 +7,7 @@ export const fetchNotes = async () => {
 
 export const createNote = async (formData) => {
   const response = await api.post('/notes', formData);
-  return response.data;
+  return response;
 };
 
 export const updateNote = async (id, formData) => {
