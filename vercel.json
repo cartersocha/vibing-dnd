@@ -13,14 +13,10 @@
       "use": "@vercel/node"
     }
   ],
-  "routes": [
+  "rewrites": [
     {
       "src": "/api/(.*)",
-      "dest": "/dnd-server/server.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/dnd-client/build/index.html"
+      "destination": "/dnd-server/server.js"
     }
   ]
 }
