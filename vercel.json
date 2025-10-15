@@ -16,14 +16,12 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/dnd-server/server.js"
-    },
-    {
-      "handle": "filesystem"
+      "dest": "/dnd-server/server.js",
+      "continue": true
     },
     {
       "src": "/.*",
-      "dest": "/index.html"
+      "dest": "/dnd-client/build/index.html"
     }
   ]
 }
