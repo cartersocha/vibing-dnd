@@ -20,6 +20,24 @@ const supabase = createClient(
 app.use(cors());
 app.use(express.json());
 
+// Diagnostic endpoint to inspect what Vercel forwards in production.
+// This will echo back the method, path, and selected headers so we can
+// confirm whether POST/OPTIONS are reaching the serverless handler.
+app.all('/api/_diag', (req, res) => {
+  const { method, path, headers, body } = req;
+  // Only return a subset of headers to keep output small
+  const debugHeaders = {
+    host: headers.host,
+    origin: headers.origin,
+    referer: headers.referer || headers.referrer,
+    'x-vercel-id': headers['x-vercel-id'],
+    'x-vercel-cache': headers['x-vercel-cache'],
+    'content-type': headers['content-type']
+  };
+
+  res.json({ ok: true, method, path, headers: debugHeaders, bodyProvided: !!Object.keys(body || {}).length });
+});
+
 
 // --- Multer Configuration for File Uploads ---
 const storage = multer.memoryStorage(); // Store files in memory temporarily
@@ -319,21 +337,6 @@ app.put('/api/notes/:id', (req, res) => {
   });
 });
 
-// GET a single note with related characters
-app.get('/api/notes/:id', (req, res) => {
-  const noteId = parseInt(req.params.id);
-  const note = notes.find(n => n.id === noteId);
-  if (!note) return res.status(404).json({ message: 'Note not found' });
-
-  const relatedCharacterIds = sessionCharacters
-    .filter(sc => sc.sessionId === noteId)
-    .map(sc => sc.characterId);
-
-  const relatedCharacters = characters.filter(c => relatedCharacterIds.includes(c.id));
-
-  res.json({ ...note, characters: relatedCharacters });
-});
-
 // DELETE a note
 app.delete('/api/notes/:id', async (req, res) => {
   try {
@@ -556,21 +559,6 @@ app.put('/api/characters/:id', (req, res) => {
   });
 });
 
-// GET a single character with related sessions
-app.get('/api/characters/:id', (req, res) => {
-  const charId = parseInt(req.params.id);
-  const character = characters.find(c => c.id === charId);
-  if (!character) return res.status(404).json({ message: 'Character not found' });
-
-  const relatedSessionIds = sessionCharacters
-    .filter(sc => sc.characterId === charId)
-    .map(sc => sc.sessionId);
-
-  const relatedSessions = notes.filter(n => relatedSessionIds.includes(n.id));
-
-  res.json({ ...character, sessions: relatedSessions });
-});
-
 // DELETE a character
 app.delete('/api/characters/:id', async (req, res) => {
   try {
@@ -664,22 +652,10 @@ app.delete('/api/notes/:noteId/characters/:characterId', async (req, res) => {
   }
 });
 
-  sessionCharacters.push({ sessionId, characterId });
-  res.status(201).json({ message: 'Character added to session' });
-});
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Backend running on port ${PORT}`);
+  });
+}
 
-// Remove a character from a session
-app.delete('/api/notes/:noteId/characters/:characterId', (req, res) => {
-  const sessionId = parseInt(req.params.noteId);
-  const characterId = parseInt(req.params.characterId);
-
-  sessionCharacters = sessionCharacters.filter(
-    sc => !(sc.sessionId === sessionId && sc.characterId === characterId)
-  );
-
-  res.status(204).send();
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Backend running on port ${PORT}`);
-});
+module.exports = app;
