@@ -20,6 +20,24 @@ const supabase = createClient(
 app.use(cors());
 app.use(express.json());
 
+// Diagnostic endpoint to inspect what Vercel forwards in production.
+// This will echo back the method, path, and selected headers so we can
+// confirm whether POST/OPTIONS are reaching the serverless handler.
+app.all('/api/_diag', (req, res) => {
+  const { method, path, headers, body } = req;
+  // Only return a subset of headers to keep output small
+  const debugHeaders = {
+    host: headers.host,
+    origin: headers.origin,
+    referer: headers.referer || headers.referrer,
+    'x-vercel-id': headers['x-vercel-id'],
+    'x-vercel-cache': headers['x-vercel-cache'],
+    'content-type': headers['content-type']
+  };
+
+  res.json({ ok: true, method, path, headers: debugHeaders, bodyProvided: !!Object.keys(body || {}).length });
+});
+
 
 // --- Multer Configuration for File Uploads ---
 const storage = multer.memoryStorage(); // Store files in memory temporarily
@@ -634,8 +652,10 @@ app.delete('/api/notes/:noteId/characters/:characterId', async (req, res) => {
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Backend running on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Backend running on port ${PORT}`);
+  });
+}
 
 module.exports = app;
