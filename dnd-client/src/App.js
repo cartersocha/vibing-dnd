@@ -96,8 +96,13 @@ function App() {
         // --- CREATE ---
         const formData = new FormData();
         for (const key in noteData) {
-          if (key === 'characterIds' || noteData[key] === null || noteData[key] === undefined) continue;
-          formData.append(key, noteData[key]);
+          if (noteData[key] === null || noteData[key] === undefined) continue;
+
+          if (key === 'characterIds' && Array.isArray(noteData[key])) {
+            noteData[key].forEach(id => formData.append('characterIds', id));
+          } else {
+            formData.append(key, noteData[key]);
+          }
         }
 
         const response = await noteService.createNote(formData);
