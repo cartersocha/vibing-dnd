@@ -5,10 +5,9 @@ import './App.css';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 
-const API_URL = 'http://localhost:5001/api/notes';
-const CHAR_API_URL = 'http://localhost:5001/api/characters';
+const API_URL = '/api/notes';
+const CHAR_API_URL = '/api/characters';
 
-// This is not secure for a real production app, but it's a simple gate for a portfolio project.
 const ACCESS_PASSWORD = 'rat palace';
 
 function App() {
@@ -775,7 +774,7 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
           <div className="character-detail-sidebar">
             {character.imageUrl && (
               <div className="character-portrait-container">
-                <img src={`http://localhost:5001${character.imageUrl}`} alt={character.name} className="character-portrait-large" />
+                <img src={character.imageUrl} alt={character.name} className="character-portrait-large" />
               </div>
             )}
           </div>
@@ -904,7 +903,7 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
       ) : (
         <div className="card">
           {note.imageUrl && (
-            <img src={`http://localhost:5001${note.imageUrl}`} alt={note.title} className="session-banner-image" />
+            <img src={note.imageUrl} alt={note.title} className="session-banner-image" />
           )}
           <div className="page-header">
             <div>
@@ -959,14 +958,14 @@ function NoteForm({ note, onSave, onCancel, characters = [] }) {
   const [date, setDate] = useState(note.date || new Date().toISOString().split('T')[0]);
   const [content, setContent] = useState(note.content || '');
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(note.imageUrl ? `http://localhost:5001${note.imageUrl}` : null);
+  const [imagePreview, setImagePreview] = useState(note.imageUrl || null);
   const [selectedCharacters, setSelectedCharacters] = useState(note.characters?.map(c => c.id) || []);
 
   useEffect(() => {
     setTitle(note.title || '');
     setDate(note.date || new Date().toISOString().split('T')[0]);
     setContent(note.content || '');
-    setImagePreview(note.imageUrl ? `http://localhost:5001${note.imageUrl}` : null);
+    setImagePreview(note.imageUrl || null);
     setSelectedCharacters(note.characters?.map(c => c.id) || []);
   }, [note]);
 
@@ -1086,7 +1085,7 @@ function CharacterForm({ character, onSave, onCancel, notes = [], characters = [
   const [backstory, setBackstory] = useState(character.backstory || '');
   const [selectedSessions, setSelectedSessions] = useState(character.sessions?.map(s => s.id) || []);
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(character.imageUrl ? `http://localhost:5001${character.imageUrl}` : null);
+  const [imagePreview, setImagePreview] = useState(character.imageUrl || null);
 
   const races = ['Human', 'Elf', 'Dwarf', 'Halfling', 'Dragonborn', 'Gnome', 'Half-Elf', 'Half-Orc', 'Tiefling'];
   const classes = ['Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard'];

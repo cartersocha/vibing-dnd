@@ -5,12 +5,16 @@ const multer = require('multer');
 const path = require('path');
 
 const app = express();
-const PORT = 5001;
+const PORT = process.env.PORT || 5001;
 
 app.use(cors());
 app.use(express.json());
-// Serve static files from the 'public' directory
-app.use(express.static('public'));
+
+// --- Static File Serving for Production ---
+// Serve uploaded images from the 'public/uploads' directory, making them available at /uploads
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+// Serve the built React app's static files
+app.use(express.static(path.join(__dirname, '../dnd-client/build')));
 
 // --- Multer Configuration for File Uploads ---
 const storage = multer.diskStorage({
@@ -43,20 +47,18 @@ let sessionCharacters = [
   { sessionId: 2, characterId: 1 },
 ];
 
-// --- API Endpoints ---
-
 // GET all notes
 app.get('/api/notes', (req, res) => {
   const notesWithCharacters = notes.map(note => {
     const relatedCharacterIds = sessionCharacters
       .filter(sc => sc.sessionId === note.id)
       .map(sc => sc.characterId);
-    
+
     const relatedCharacters = characters.filter(c => relatedCharacterIds.includes(c.id));
-    
+
     return { ...note, characters: relatedCharacters };
   });
-  
+
   res.json(notesWithCharacters);
 });
 
@@ -73,7 +75,7 @@ app.post('/api/notes', (req, res) => {
     if (existingNote) {
       return res.status(409).json({ message: 'A session with this title already exists.' });
     }
-    
+
     const sanitizedTitle = sanitizeHtml(title, { allowedTags: [], allowedAttributes: {} });
     const sanitizedContent = sanitizeHtml(content);
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
@@ -109,15 +111,14 @@ app.put('/api/notes/:id', (req, res) => {
     if (req.body.content) sanitizedBody.content = sanitizeHtml(req.body.content);
     if (req.body.date) sanitizedBody.date = sanitizeHtml(req.body.date, { allowedTags: [], allowedAttributes: {} });
 
-    const existingNote = notes[noteIndex];
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : existingNote.imageUrl;
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : notes[noteIndex].imageUrl;
 
     notes[noteIndex] = { 
-      ...existingNote, 
+      ...notes[noteIndex],
       ...sanitizedBody,
       imageUrl
     };
-    
+
     res.json(notes[noteIndex]);
   });
 });
@@ -131,7 +132,7 @@ app.get('/api/notes/:id', (req, res) => {
   const relatedCharacterIds = sessionCharacters
     .filter(sc => sc.sessionId === noteId)
     .map(sc => sc.characterId);
-  
+
   const relatedCharacters = characters.filter(c => relatedCharacterIds.includes(c.id));
 
   res.json({ ...note, characters: relatedCharacters });
@@ -152,12 +153,12 @@ app.get('/api/characters', (req, res) => {
     const relatedSessionIds = sessionCharacters
       .filter(sc => sc.characterId === character.id)
       .map(sc => sc.sessionId);
-    
+
     const relatedSessions = notes.filter(n => relatedSessionIds.includes(n.id));
-    
+
     return { ...character, sessions: relatedSessions };
   });
-  
+
   res.json(charactersWithSessions);
 });
 
@@ -167,8 +168,8 @@ app.post('/api/characters', (req, res) => {
     if (err) {
       return res.status(500).json({ message: 'Error uploading file.', error: err });
     }
-    const { name, race, class: charClass } = req.body;
-    if (!name || !race || !charClass) {
+    const { name, race, class: charClass, status, location, backstory, playerType } = req.body;
+    if (!name || !race || !charClass || !playerType) {
       return res.status(400).json({ message: 'Name, race, and class are required' });
     }
 
@@ -194,7 +195,7 @@ app.put('/api/characters/:id', (req, res) => {
     if (err) {
       return res.status(500).json({ message: 'Error uploading file.', error: err });
     }
-    
+
     const charId = parseInt(req.params.id);
     const charIndex = characters.findIndex(c => c.id === charId);
 
@@ -210,7 +211,7 @@ app.put('/api/characters/:id', (req, res) => {
     for (const key in req.body) {
       // Skip empty values unless they're intentionally falsy
       if (req.body[key] === null || req.body[key] === undefined) continue;
-      
+
       if (key === 'backstory') {
         sanitizedBody[key] = sanitizeHtml(req.body[key]); // Use default safe tags for backstory
       } else if (key === 'id') {
@@ -294,4 +295,12 @@ app.delete('/api/notes/:noteId/characters/:characterId', (req, res) => {
   res.status(204).send();
 });
 
-app.listen(PORT, () => console.log(`✅ Backend running at http://localhost:${PORT}`));
+// The "catchall" handler: for any request that doesn't match one above,
+// send back React's index.html file.
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dnd-client/build/index.html'));
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Backend running on port ${PORT}`);
+});
