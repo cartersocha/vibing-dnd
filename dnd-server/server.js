@@ -237,6 +237,45 @@ app.post('/api/notes', (req, res) => {
   });
 });
 
+// GET a single note by ID
+app.get('/api/notes/:id', async (req, res) => {
+  try {
+    const noteId = parseInt(req.params.id);
+    if (isNaN(noteId)) {
+      return res.status(400).json({ message: 'Invalid note ID.' });
+    }
+
+    const { data: note, error } = await supabase
+      .from('notes')
+      .select(`
+        *,
+        session_characters(
+          character_id,
+          characters(*)
+        )
+      `)
+      .eq('id', noteId)
+      .single();
+
+    if (error || !note) {
+      // Supabase returns an error if .single() doesn't find a row
+      return res.status(404).json({ message: 'Note not found' });
+    }
+
+    // Transform the data to match the expected frontend format
+    const noteWithCharacters = {
+      ...note,
+      imageUrl: note.image_url,
+      characters: note.session_characters.map(sc => sc.characters)
+    };
+
+    res.json(noteWithCharacters);
+  } catch (error) {
+    console.error(`Error fetching note with id ${req.params.id}:`, error);
+    res.status(500).json({ message: 'Error fetching note', error: error.message });
+  }
+});
+
 // PUT (update) a note
 app.put('/api/notes/:id', (req, res) => {
   upload(req, res, async (err) => {
