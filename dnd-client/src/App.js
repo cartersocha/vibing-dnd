@@ -101,8 +101,8 @@ function App() {
         }
 
         const response = await noteService.createNote(formData);
-        setNotes([...notes, response].sort((a, b) => Number(b.id) - Number(a.id)));
-        return response.data;
+        setNotes([...notes, response.data].sort((a, b) => Number(b.id) - Number(a.id)));
+        return response.data; // Assuming noteService.createNote returns an axios response object
       }
     } catch (err) {
       console.error('Error saving note:', err);
@@ -160,7 +160,7 @@ function App() {
         }
 
         setCharacters([...characters, newChar].sort((a, b) => a.name.localeCompare(b.name)));
-        return response.data;
+        return newChar;
       }
     } catch (err) {
       console.error('Error saving character:', err);
