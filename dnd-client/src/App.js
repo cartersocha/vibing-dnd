@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, NavLink, useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import './App.css';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
+import * as noteService from './services/notes';
+import * as characterService from './services/characters';
+import api from './api'; // For direct relationship calls
 
-const API_URL = '/api/notes';
-const CHAR_API_URL = '/api/characters';
+const API_URL = '/api/notes'; // Keep for relationship calls for now
+const CHAR_API_URL = '/api/characters'; // Keep for relationship calls for now
 
 const ACCESS_PASSWORD = 'rat palace';
 
@@ -20,7 +22,7 @@ function App() {
   
   const fetchCharacters = useCallback(async () => {
     try {
-      const res = await axios.get(CHAR_API_URL);
+      const res = await characterService.fetchCharacters();
       // Sort alphabetically by name
       setCharacters(res.data.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (err) {
@@ -30,7 +32,7 @@ function App() {
 
   const fetchNotes = useCallback(async () => {
     try {
-      const res = await axios.get(API_URL);
+      const res = await noteService.fetchNotes();
       // Sort descending by ID (newest first)
       setNotes(res.data.sort((a, b) => Number(b.id) - Number(a.id)));
     } catch (err) {
@@ -69,11 +71,7 @@ function App() {
           }
         }
 
-        const response = await axios.put(`${API_URL}/${noteData.id}`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
+        const response = await noteService.updateNote(noteData.id, formData);
 
         // Handle relationship changes
         const originalNote = notes.find(n => n.id === noteData.id);
@@ -83,8 +81,8 @@ function App() {
         const toAdd = newCharIds.filter(id => !originalCharIds.includes(id));
         const toRemove = originalCharIds.filter(id => !newCharIds.includes(id));
 
-        const addPromises = toAdd.map(charId => axios.post(`${API_URL}/${noteData.id}/characters`, { characterId: charId }));
-        const removePromises = toRemove.map(charId => axios.delete(`${API_URL}/${noteData.id}/characters/${charId}`));
+        const addPromises = toAdd.map(charId => noteService.addCharacterToSession(noteData.id, charId));
+        const removePromises = toRemove.map(charId => noteService.removeCharacterFromSession(noteData.id, charId));
 
         await Promise.all([...addPromises, ...removePromises]);
 
@@ -102,13 +100,8 @@ function App() {
           formData.append(key, noteData[key]);
         }
 
-        const response = await axios.post(API_URL, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-
-        setNotes([...notes, response.data].sort((a, b) => Number(b.id) - Number(a.id)));
+        const response = await noteService.createNote(formData);
+        setNotes([...notes, response].sort((a, b) => Number(b.id) - Number(a.id)));
         return response.data;
       }
     } catch (err) {
@@ -135,9 +128,7 @@ function App() {
           }
         }
 
-        const response = await axios.put(`${CHAR_API_URL}/${charData.id}`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        const response = await characterService.updateCharacter(charData.id, formData);
 
         // The logic for updating session relationships remains the same
         // and would be handled separately if needed.
@@ -157,15 +148,13 @@ function App() {
           formData.append(key, charData[key]);
         }
 
-        const response = await axios.post(CHAR_API_URL, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        const newChar = response.data;
+        const newChar = await characterService.createCharacter(formData);
 
         // If sessions were selected, create those relationships now
         if (charData.sessionIds && charData.sessionIds.length > 0) {
           const relationshipPromises = charData.sessionIds.map(sessionId =>
-            axios.post(`${API_URL}/${sessionId}/characters`, { characterId: newChar.id })
+            // Using api directly as this is a relationship call
+            api.post(`/notes/${sessionId}/characters`, { characterId: newChar.id })
           );
           await Promise.all(relationshipPromises);
         }
@@ -182,7 +171,7 @@ function App() {
   const handleDeleteCharacter = async (charId) => {
     if (!window.confirm('Are you sure you want to permanently delete this character?')) return;
     try {
-      await axios.delete(`${CHAR_API_URL}/${charId}`);
+      await characterService.deleteCharacter(charId);
       setCharacters(characters.filter(c => c.id !== charId));
     } catch (err) {
       console.error('Error deleting character:', err);
@@ -192,7 +181,7 @@ function App() {
   const handleDeleteNote = async (noteId) => {
     if (!window.confirm('Are you sure you want to delete this note?')) return;
     try {
-      await axios.delete(`${API_URL}/${noteId}`);
+      await noteService.deleteNote(noteId);
       setNotes(notes.filter(n => n.id !== noteId));
     } catch (err) {
       console.error('Error deleting note:', err);
@@ -644,7 +633,7 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
   useEffect(() => {
     const fetchCharacter = async () => {
       try {
-        const res = await axios.get(`${CHAR_API_URL}/${charId}`);
+        const res = await api.get(`/characters/${charId}`);
         setCharacter(res.data);
       } catch (err) {
         console.error("Error fetching character details:", err);
@@ -670,10 +659,10 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
 
   const addSessionToCharacter = async (sessionId) => {
     try {
-      await axios.post(`${API_URL}/${sessionId}/characters`, { characterId: character.id });
+      await api.post(`/notes/${sessionId}/characters`, { characterId: character.id });
       onDataChange(); // Tell the App to refetch all data
       // Also refresh the character data directly
-      const res = await axios.get(`${CHAR_API_URL}/${charId}`);
+      const res = await api.get(`/characters/${charId}`);
       setCharacter(res.data);
     } catch (err) {
       console.error("Error adding session to character:", err);
@@ -683,10 +672,10 @@ function CharacterDetailPage({ notes, onSaveCharacter, onDeleteCharacter, onData
 
   const removeSessionFromCharacter = async (sessionId) => {
     try {
-      await axios.delete(`${API_URL}/${sessionId}/characters/${character.id}`);
+      await api.delete(`/notes/${sessionId}/characters/${character.id}`);
       onDataChange(); // Tell the App to refetch all data
       // Also refresh the character data directly
-      const res = await axios.get(`${CHAR_API_URL}/${charId}`);
+      const res = await api.get(`/characters/${charId}`);
       setCharacter(res.data);
     } catch (err) {
       console.error("Error removing session from character:", err);
@@ -823,7 +812,7 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
   useEffect(() => {
     const fetchNote = async () => {
       try {
-        const res = await axios.get(`${API_URL}/${noteId}`);
+        const res = await api.get(`/notes/${noteId}`);
         const fetchedNote = res.data;
         
         // Calculate session number based on chronological order (ascending by date)
@@ -856,9 +845,9 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
 
   const addCharacterToSession = async (characterId) => {
     try {
-      await axios.post(`${API_URL}/${noteId}/characters`, { characterId: Number(characterId) });
+      await api.post(`/notes/${noteId}/characters`, { characterId: Number(characterId) });
       // Refetch this specific note's data to show the new character
-      const res = await axios.get(`${API_URL}/${noteId}`);
+      const res = await api.get(`/notes/${noteId}`);
       setNote(res.data);
       onDataChange(); // Also refresh the main character list in App for other components
     } catch (err) {
@@ -869,9 +858,9 @@ function NoteDetailPage({ notes, characters, onSaveNote, onDeleteNote, onDataCha
 
   const removeCharacterFromSession = async (characterId) => {
     try {
-      await axios.delete(`${API_URL}/${noteId}/characters/${characterId}`);
+      await api.delete(`/notes/${noteId}/characters/${characterId}`);
       // Refetch this specific note's data to show the character was removed
-      const res = await axios.get(`${API_URL}/${noteId}`);
+      const res = await api.get(`/notes/${noteId}`);
       setNote(res.data);
       onDataChange(); // Also refresh the main character list in App for other components
     } catch (err) {
