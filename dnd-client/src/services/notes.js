@@ -20,7 +20,8 @@ export const deleteNote = async (id) => {
 };
 
 export const addCharacterToSession = async (noteId, characterId) => {
-  const response = await api.post(`/notes/${noteId}/characters`, { characterId });
+  // server expects `character_id` in the body for the note_characters insert
+  const response = await api.post(`/notes/${noteId}/characters`, { character_id: characterId });
   return response.data;
 };
 

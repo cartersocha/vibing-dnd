@@ -256,5 +256,21 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 });
 
 // ----- IMPORTANT: do NOT call app.listen on Vercel
-// module.exports = require('serverless-http')(app); // <- also fine if you prefer
-module.exports = app;
+// Export a serverless handler so Vercel can invoke all HTTP methods correctly
+try {
+  // Prefer to use serverless-http when available in the deployed environment
+  const serverless = require('serverless-http');
+  module.exports = serverless(app);
+} catch (e) {
+  // Fallback for local development if serverless-http is not installed
+  module.exports = app;
+}
+
+// If this file is run directly (for local development), start an HTTP server.
+// This won't run on Vercel because the platform requires the exported handler.
+if (require.main === module) {
+  const port = process.env.PORT || 3001;
+  app.listen(port, () => {
+    console.log(`Local dev server listening on http://localhost:${port}`);
+  });
+}
